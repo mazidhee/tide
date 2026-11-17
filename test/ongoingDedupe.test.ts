@@ -35,11 +35,16 @@ describe('Carry on', () => {
     expect(s.getOngoing(saved[1].key)).toBeUndefined()
   })
 
-  it('keeps an answered duplicate on load, but merges on save into the longer one', () => {
+  it('keeps an answered duplicate (a lesson started again on purpose), drops an unanswered short one', () => {
     const a = entry(1, 10, 'a')
     const b = entry(2, 6, 'b')
     expect(s.dedupeOngoing([a, b] as never, true)).toHaveLength(2)
     expect(s.dedupeOngoing([a, b] as never).map((x) => x.key)).toEqual([a.key])
+    // Saving the short unanswered copy (opened again) doesn't list it beside the long one
+    const short = entry(1794818676610, 2, '72ijmk')
+    s.saveOngoing({ key: short.key, view: short.view as never, title: short.title, state: short.state, busy: false })
+    expect(s.getOngoing(short.key)).toBeUndefined()
+    expect(s.getOngoing(saved[0].key)).toBeTruthy()
   })
 
   it('a let-go lesson still on screen does not come back when it saves itself', () => {

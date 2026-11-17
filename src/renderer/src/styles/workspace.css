@@ -637,14 +637,21 @@ button.lw-follow:not(.on)::before {
 
 /* macOS full screen (main/index markFullScreen): the menu bar and title bar slide down over the
    top of the window as the pointer nears it, so page headers sit below them, always clickable */
-html.mac-fullscreen .doc-toolbar {
+:root.mac-fullscreen .doc-view .doc-toolbar.doc-toolbar {
   height: calc(var(--titlebar-h) + 40px);
   padding-top: 40px;
 }
-html.mac-fullscreen .sidebar-top {
+:root.mac-fullscreen .sidebar .sidebar-top.sidebar-top {
   padding-top: 40px;
 }
 .lw-pop > svg {
   width: 15px;
   height: 15px;
+}
+
+/* A long lesson: replies well above the newest aren't laid out or painted until they scroll near
+   (34 turns of tables, code and visuals made every keystroke and scroll lay out the whole column) */
+.s-tutor.s-old {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
 }

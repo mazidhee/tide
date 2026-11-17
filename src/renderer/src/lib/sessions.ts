@@ -38,8 +38,11 @@ const turnsOf = (o: Pick<Ongoing, 'state'>): { role: string }[] => {
   const t = (o.state as { turns?: unknown } | null)?.turns
   return Array.isArray(t) ? (t as { role: string }[]) : []
 }
-/** The learner answered something in it: more than the opening request */
-const answered = (o: Pick<Ongoing, 'state'>) => turnsOf(o).filter((t) => t.role === 'user').length > 1
+/** The learner did something in it: answered past the opening request, or asked in a thread */
+const answered = (o: Pick<Ongoing, 'state'>) => {
+  const threads = (o.state as { threads?: unknown } | null)?.threads
+  return turnsOf(o).filter((t) => t.role === 'user').length > 1 || (Array.isArray(threads) && threads.length > 0)
+}
 
 /**
  * One entry per teach topic: where two exist, the one with fewer turns goes. On load (a one-time
@@ -101,7 +104,7 @@ let loaded = false
 export function ongoingSnapshot(): Ongoing[] {
   const all = new Map<string, Ongoing>()
   for (const o of [...store.values(), ...live.values()]) if (!isClosedLesson(o) && (!all.has(o.key) || all.get(o.key)!.at < o.at)) all.set(o.key, o)
-  return dedupeOngoing([...all.values()]).sort((a, b) => b.at - a.at).slice(0, 6)
+  return dedupeOngoing([...all.values()], true).sort((a, b) => b.at - a.at).slice(0, 6)
 }
 
 const writeNow = () => window.tide.vault.write(FILE, JSON.stringify(ongoingSnapshot())).catch(() => {})
@@ -246,8 +249,9 @@ export function saveOngoing(o: Omit<Ongoing, 'at'>) {
   if (mine) for (const x of [...store.values()]) if (x.key !== o.key && record(x) === mine) store.delete(x.key)
   const kept = { ...o, at: Date.now() }
   store.set(o.key, kept)
-  // Two entries for one teach topic are one: the one with the most turns stays
-  const merged = new Set(dedupeOngoing([...store.values()]).map((x) => x.key))
+  // Two entries for one teach topic are one, the one with the most turns: a shorter copy nobody
+  // answered in goes (this one too, when a longer one is already listed)
+  const merged = new Set(dedupeOngoing([...store.values()], true).map((x) => x.key))
   for (const k of [...store.keys()]) if (!merged.has(k)) store.delete(k)
   // Keep a handful: the oldest go first
   const all = [...store.values()].sort((a, b) => b.at - a.at)

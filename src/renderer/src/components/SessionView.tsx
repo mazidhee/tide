@@ -1045,7 +1045,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       b.title = t.kind === 'paste' ? 'Puts the command at the prompt in the workspace’s terminal; press Return yourself' : 'Puts this code in a file in the workspace beside the lesson'
       pre.insertBefore(b, pre.querySelector('code'))
     })
-  })
+    // Only when the replies change, not on each key typed in the answer box
+  }, [turns, busy, workOn, workOffered, mode, openThread])
   // The tutor made a file there (workspace_file, main/ide/lesson): it opens in the Workspace
   useEffect(
     () =>
@@ -2506,7 +2507,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             return (
               <Fragment key={i}>
               {showMap && dividersAt(i, 0)}
-              <div className={`s-tutor${runHeld.has(i) ? ' run-held' : ''}`} data-turn={i}>
+              <div className={`s-tutor${runHeld.has(i) ? ' run-held' : ''}${i < turns.length - 4 ? ' s-old' : ''}`} data-turn={i}>
                 {tide && (
                   <div className="td-who">
                     <Professor state={live ? 'writing' : 'idle'} size={24} />
