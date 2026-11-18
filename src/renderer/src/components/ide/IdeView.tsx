@@ -1826,7 +1826,7 @@ function TutorPanel({ file, text, language, result, problems }: { file: string |
           <TurnView key={t.id} turn={t} />
         ))}
       </div>
-      <Composer value={input} onChange={setInput} onSend={() => void ask(input)} busy={convo.busy} onStop={convo.stop} web={convo.web} onWeb={convo.setWeb} placeholder="Ask about your code" />
+      <Composer answeredBy={convo.answeredBy} value={input} onChange={setInput} onSend={() => void ask(input)} busy={convo.busy} onStop={convo.stop} web={convo.web} onWeb={convo.setWeb} placeholder="Ask about your code" />
     </div>
   )
 }

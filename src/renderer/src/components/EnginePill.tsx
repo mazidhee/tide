@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { providerInfo } from '@shared/providers'
-import { CLAUDE_MODELS, claudeLabel, claudeModel } from '@shared/claude'
+import { autoLabel, CLAUDE_MODELS, claudeModel } from '@shared/claude'
 import type { ChatRequest, ClaudeModel, ClaudeStatusView } from '@shared/types'
 import { useApp } from '../state'
 import { PillSelect } from './PromptBox'
@@ -26,15 +26,17 @@ export function engineFields(e: Engine): Pick<ChatRequest, 'engine' | 'claudeMod
   return { engine: e as ChatRequest['engine'] }
 }
 
-let claudeSeen: Promise<ClaudeStatusView | null> | null = null
-const claudeState = () => (claudeSeen ??= window.tide.claude.status().catch(() => null))
+// Asked again each time a picker appears (main keeps the answer for a while): a status from before
+// logging in to Claude, or from a limit since lifted, would otherwise name the wrong model all session
+const claudeState = (): Promise<ClaudeStatusView | null> => window.tide.claude.status().catch(() => null)
+
 
 /**
  * Which model answers: Claude (on the model you pick for this lesson), Gemma on this Mac, the
  * cloud model, or Auto, which follows Settings and the notebook. Shown once Claude or a cloud
- * model is set up.
+ * model is set up. `answeredBy` is who answered the last reply, so Auto names the model in use.
  */
-export function EnginePill({ value, onChange }: { value?: Engine; onChange?(v: Engine): void }) {
+export function EnginePill({ value, onChange, answeredBy }: { value?: Engine; onChange?(v: Engine): void; answeredBy?: string }) {
   const app = useApp()
   const cloud = app.settings.cloud
   const [hasKey, setHasKey] = useState(false)
@@ -64,7 +66,7 @@ export function EnginePill({ value, onChange }: { value?: Engine; onChange?(v: E
   const teaching = claude && c?.teacher !== 'gemma'
   const name = cloudOn ? (providerInfo(cloud!.provider, cloud).models.find((m) => m.id === cloud!.model)?.label ?? cloud!.model) : ''
   const options: { value: Engine; label: string }[] = [
-    { value: 'auto', label: teaching ? `Auto (Claude ${claudeLabel(claudeModel('teach', c))})` : cloud?.mode === 'auto' && cloudOn ? 'Auto' : 'Gemma' },
+    { value: 'auto', label: autoLabel({ answeredBy, teaching, teachModel: claudeModel('teach', c), cloudAuto: cloud?.mode === 'auto' && cloudOn, cloudName: name }) },
     ...(claude ? CLAUDE_MODELS.filter((m) => m.id !== 'haiku').map((m) => ({ value: `claude:${m.id}` as Engine, label: `Claude ${m.label}` })) : []),
     ...(teaching || (cloudOn && cloud?.mode === 'auto') ? [{ value: 'local' as Engine, label: 'Gemma only' }] : []),
     ...(cloudOn ? [{ value: 'cloud' as Engine, label: name }] : [])

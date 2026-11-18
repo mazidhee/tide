@@ -45,6 +45,8 @@ export function FlightTutor({ slug, title, step, stepTitle, root, file, terminal
   })
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState('')
+  // The model that answered the last reply, for the picker's Auto
+  const [answeredBy, setAnsweredBy] = useState<string>()
   const [engine, setEngine] = useState<Engine>(() => (localStorage.getItem(ENGINE) as Engine) || 'auto')
   const labId = useMemo(() => `work:${slug}`, [slug])
   const topic = `Work project: ${title}`
@@ -71,6 +73,7 @@ export function FlightTutor({ slug, title, step, stepTitle, root, file, terminal
     () =>
       window.tide.ai.onEvent((e) => {
         if (e.id !== live.current) return
+        if (e.type === 'model') return setAnsweredBy(e.model)
         if (e.type === 'delta') setTurns((t) => (t.length ? [...t.slice(0, -1), { ...t[t.length - 1], content: t[t.length - 1].content + e.text }] : t))
         else if (e.type === 'reset') setTurns((t) => (t.length ? [...t.slice(0, -1), { ...t[t.length - 1], content: '' }] : t))
         else if (e.type === 'error') {
@@ -119,6 +122,7 @@ export function FlightTutor({ slug, title, step, stepTitle, root, file, terminal
         <span>· step {step}</span>
         <span className="fp-sp" />
         <EnginePill
+          answeredBy={answeredBy}
           value={engine}
           onChange={(v) => {
             setEngine(v)
