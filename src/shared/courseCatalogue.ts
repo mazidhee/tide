@@ -18,7 +18,7 @@
 import { WEB_COURSES } from './courseCatalogueWeb'
 import type { CleanRules } from './pageClean'
 
-export type CourseArea = 'payments' | 'blockchain' | 'quant' | 'econ' | 'data' | 'mlops' | 'ml' | 'dl' | 'cs' | 'systems' | 'swe' | 'design' | 'algo' | 'maths' | 'physics'
+export type CourseArea = 'payments' | 'blockchain' | 'quant' | 'econ' | 'data' | 'mlops' | 'ml' | 'dl' | 'cs' | 'systems' | 'swe' | 'design' | 'algo' | 'maths' | 'physics' | 'reading'
 
 export const AREAS: { id: CourseArea; label: string; blurb: string }[] = [
   { id: 'payments', label: 'Payments and banking', blurb: 'Payment rails, messaging, core and open banking, ledgers' },
@@ -35,7 +35,8 @@ export const AREAS: { id: CourseArea; label: string; blurb: string }[] = [
   { id: 'design', label: 'System design', blurb: 'Building for scale' },
   { id: 'algo', label: 'Algorithms and interviews', blurb: 'Data structures, algorithms, interview prep' },
   { id: 'maths', label: 'Maths', blurb: 'Linear algebra, numerical methods, probability' },
-  { id: 'physics', label: 'Physics and simulation', blurb: 'Fluids, filters, quantum computing' }
+  { id: 'physics', label: 'Physics and simulation', blurb: 'Fluids, filters, quantum computing' },
+  { id: 'reading', label: 'Reading and philosophy', blurb: 'Philosophy, primary texts and academic papers, read closely' }
 ]
 
 export type LicenceTier = 'open' | 'personal'
