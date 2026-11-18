@@ -1,18 +1,24 @@
 """Tide's Python tracer: runs a short snippet under sys.settrace and writes what memory held at
 each step, for a visual to replay (TideMachine.python, main/pyTrace). Standard library only.
 
-    python -I pyTrace.py snippet.py trace.json
+    python -I pyTrace.py snippet.py trace.json [ops]
 
 Each step is the state just before a line runs (or as a function returns): the frames, innermost
 last, each with its names and the id of the object each names; and the objects reachable from
 them, by id: type, value, items, attributes, CPython's int digits, size. Objects are kept once
 per distinct state, so a long trace stays small.
+
+With "ops" (the Python lab, renderer lib/pyLab) a step is taken before each bytecode instruction
+instead of each line: every code object that runs is disassembled once into "codes", and each
+frame says which code it runs and the offset of the instruction it is about to run.
 """
+import dis
 import io
 import json
 import sys
 
-MAX_STEPS = 240
+OPS = len(sys.argv) > 3 and sys.argv[3] == "ops"
+MAX_STEPS = 2000 if OPS else 240
 MAX_OBJECTS = 80
 MAX_ITEMS = 24
 MAX_TEXT = 60
@@ -126,15 +132,55 @@ def names_of(f):
     return [(k, v) for k, v in loc.items() if k not in HIDDEN and not (k.startswith("__") and k.endswith("__")) and type(v).__name__ != "module"]
 
 
+codes = []
+code_index = {}
+
+
+def code_of(c):
+    """The index of a code object in "codes", disassembling it the first time it runs"""
+    i = code_index.get(id(c))
+    if i is None:
+        ops = []
+        for ins in dis.get_instructions(c):
+            if hasattr(ins.argval, "co_code"):
+                arg = "code " + ins.argval.co_name
+            else:
+                arg = ins.argrepr or ("" if ins.arg is None else str(ins.arg))
+            line = ins.positions.lineno if ins.positions and ins.positions.lineno else 0
+            ops.append([ins.offset, ins.opname, arg[:MAX_TEXT], line, 1 if ins.is_jump_target else 0])
+        i = code_index[id(c)] = len(codes)
+        codes.append({"name": "module" if c.co_name == "<module>" else c.co_name, "first": c.co_firstlineno, "ops": ops})
+        keep_alive.append(c)
+    return i
+
+
+# Code objects disassembled, so their ids are not reused while the trace runs
+keep_alive = []
+# Each frame's last line: an instruction the compiler added (an except block's clean-up) has none
+last_line = {}
+
+
+def line_of(f):
+    n = f.f_lineno
+    if n:
+        last_line[id(f)] = n
+        return n
+    return last_line.get(id(f), f.f_code.co_firstlineno)
+
+
 def record(frame, event, arg):
     chain = frames_of(frame)
     shown = []
     todo = []
     for f in chain:
         names = names_of(f)
-        shown.append({"name": "module" if f.f_code.co_name == "<module>" else f.f_code.co_name, "line": f.f_lineno, "names": [[k, ref(v)] for k, v in names]})
+        fr = {"name": "module" if f.f_code.co_name == "<module>" else f.f_code.co_name, "line": line_of(f), "names": [[k, ref(v)] for k, v in names]}
+        if OPS:
+            fr["code"] = code_of(f.f_code)
+            fr["at"] = f.f_lasti
+        shown.append(fr)
         todo.extend(v for _, v in names)
-    step = {"line": frame.f_lineno, "event": event, "frames": shown}
+    step = {"line": line_of(frame), "event": event, "frames": shown}
     if event == "return" and frame.f_code.co_name != "<module>":
         step["ret"] = ref(arg)
         todo.append(arg)
@@ -166,7 +212,11 @@ def record(frame, event, arg):
 def tracer(frame, event, arg):
     if frame.f_code.co_filename != FILE:
         return None
-    if event in ("line", "return", "exception"):
+    if OPS:
+        frame.f_trace_opcodes = True
+        if event in ("opcode", "return", "exception"):
+            record(frame, event, arg)
+    elif event in ("line", "return", "exception"):
         record(frame, event, arg)
     return tracer
 
@@ -200,5 +250,8 @@ if stopped[0]:
     result["stopped"] = stopped[0]
 result["steps"] = steps
 result["objects"] = objects
+if OPS:
+    result["codes"] = codes
+    result["version"] = "%d.%d.%d" % sys.version_info[:3]
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(result, f, separators=(",", ":"))

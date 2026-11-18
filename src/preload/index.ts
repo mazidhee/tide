@@ -308,6 +308,7 @@ const api: TideApi = {
     cached: invoke('visuals:cached'),
     remember: invoke('visuals:remember'),
     trace: invoke('visuals:trace'),
+    traceLab: invoke('visuals:traceLab'),
     concept: invoke('visuals:concept'),
     part: invoke('visuals:part'),
     partOf: invoke('visuals:partOf'),

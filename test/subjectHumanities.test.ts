@@ -80,8 +80,8 @@ describe('the humanities through the subject profile', () => {
     expect(counts["Kant's categorical imperative"]).toBeLessThan(1050)
     // Physics: the quant lesson with two simulations it can show (physics, plot)
     expect(counts["Newton's second law of motion"]).toBeLessThan(1250)
-    // A language lesson also carries the depth rules (shared/subjects LANGUAGE_DEPTH, about 130 words)
-    expect(counts['Python generators and yield']).toBeLessThan(1550)
+    // A language lesson also carries the depth rules (shared/subjects LANGUAGE_DEPTH, about 130 words), and a Python one the Python lab (shared/pyLab, about 50)
+    expect(counts['Python generators and yield']).toBeLessThan(1600)
   })
 })
 

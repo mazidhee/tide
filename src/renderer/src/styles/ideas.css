@@ -544,7 +544,8 @@
 }
 
 .ip-map .copy-code,
-.ip-map .run-code {
+.ip-map .run-code,
+.ip-map .step-code {
   display: none;
 }
 

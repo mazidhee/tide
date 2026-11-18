@@ -73,6 +73,7 @@ const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default
 const Reader = lazy(() => import('./components/reading/Reader').then((m) => ({ default: m.Reader })))
 const ReadingRoom = lazy(() => import('./components/reading/ReadingRoom').then((m) => ({ default: m.ReadingRoom })))
 const LabView = lazy(() => import('./components/LabView').then((m) => ({ default: m.LabView })))
+const PyLabView = lazy(() => import('./components/PyLabView').then((m) => ({ default: m.PyLabView })))
 const WorkshopView = lazy(() => import('./components/WorkshopView').then((m) => ({ default: m.WorkshopView })))
 const CoursesView = lazy(() => import('./components/CoursesView').then((m) => ({ default: m.CoursesView })))
 const FlightPlan = lazy(() => import('./components/FlightPlan').then((m) => ({ default: m.FlightPlan })))
@@ -587,6 +588,7 @@ export default function App() {
   else if (view.kind === 'workshop') main = <WorkshopView key={`${view.id ?? ''}:${view.from?.topic ?? ''}:${view.nonce ?? ''}`} id={view.id} from={view.from} />
   else if (view.kind === 'new-topic') main = <NewTopicView key={view.nonce ?? 'new'} initial={view.topic} initialGoal={view.goal} auto={view.auto} />
   else if (view.kind === 'chat') main = <ChatPage id={view.id} />
+  else if (view.kind === 'pylab') main = <PyLabView starter={view.starter} topic={view.topic} code={view.code} />
   else if (view.kind === 'lab') main = <LabView key={`${view.terminal}:${view.topic ?? ''}:${view.nonce ?? ''}`} kind={view.terminal} topic={view.topic} />
   else if (view.kind === 'coach') main = <CoachView />
   else if (view.kind === 'learner') main = <LearnerProfileView />

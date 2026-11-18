@@ -48,6 +48,8 @@ export type View =
   | { kind: 'courses'; id?: string; lesson?: string; area?: import('@shared/courses').CourseArea }
   | { kind: 'chat'; id?: string }
   | { kind: 'lab'; terminal: 'lab' | 'local'; topic?: string; nonce?: number }
+  /** The Python lab (components/PyLabView): a starter program on Python's internals, one for a lesson's topic, or a program of its own */
+  | { kind: 'pylab'; starter?: string; topic?: string; code?: string }
   | { kind: 'coach' }
   /** What the tutor knows about you: the learner profile (main/learnerProfile) */
   | { kind: 'learner' }
@@ -174,7 +176,7 @@ const HOME: View = { kind: 'home' }
 export const tabRoot: { current: HTMLElement | null } = { current: null }
 
 const TABS_KEY = 'tide.tabs'
-const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'workshop', 'new-topic', 'courses', 'projects', 'writing', 'comprehension', 'chat', 'lab', 'coach', 'learner', 'wrapup', 'weekly', 'northstar', 'drill', 'maths', 'workout', 'sharp', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
+const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'workshop', 'new-topic', 'courses', 'projects', 'writing', 'comprehension', 'chat', 'lab', 'pylab', 'coach', 'learner', 'wrapup', 'weekly', 'northstar', 'drill', 'maths', 'workout', 'sharp', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
 
 /** The tabs kept last time (the main window only), or one on Home */
 function loadTabs(): T.Tabs<View> {
