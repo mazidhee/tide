@@ -1,5 +1,7 @@
 import { smoothly } from './lib/smoothly'
 import { onShelf } from './lib/readingRoom'
+import { openTarget } from './lib/linkNav'
+import { parseRefPath } from '@shared/reference'
 import { currentSurface, focusIfHeld, handoverView, heldView, inFocusWindow, popOut } from './lib/popout'
 import { canBack, navBack, navForward, navLeave, samePage, type Nav } from './lib/history'
 import * as T from './lib/tabs'
@@ -480,6 +482,9 @@ export function AppProvider({ initial, children }: { initial: Settings; children
 
   const openPath = useCallback(
     (path: string, anchor?: string) => {
+      // A passage of the offline reference the tutor cited (ref:<source>/<cite>): a page in the reading sheet, a source file read-only at its line
+      const ref = parseRefPath(path)
+      if (ref) return openTarget({ kind: 'reference', source: ref.source, path: ref.path, ...(ref.anchor ? { anchor: ref.anchor } : {}), ...(ref.line ? { line: ref.line } : {}) })
       // A book (an EPUB, or anything on the reading room's shelf) opens in the reader
       setView(/\.epub$/i.test(path) || onShelf(path) ? { kind: 'reader', path, anchor, nonce: Date.now() } : { kind: 'file', path, anchor, nonce: Date.now() })
       setRecent((r) => {

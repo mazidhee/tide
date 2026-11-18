@@ -1,6 +1,7 @@
 import { reveal } from '../lib/scroll'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SearchHit } from '@shared/types'
+import { REF_LABELS, refSourcePath, type RefHit } from '@shared/reference'
 import { fileTitle, folderOf, useApp } from '../state'
 import { Icon, type IconName } from './Icon'
 
@@ -35,22 +36,73 @@ export function SearchPalette({ onClose }: { onClose(): void }) {
   const app = useApp()
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<SearchHit[]>([])
+  const [scope, setScope] = useState<'notes' | 'reference'>('notes')
+  const [refHits, setRefHits] = useState<RefHit[] | null>(null)
   const [active, setActive] = useState(0)
   const listRef = useRef<HTMLUListElement>(null)
 
+  // Notes: keyword hits while typing, then keyword and meaning fused once typing pauses
   useEffect(() => {
+    if (scope !== 'notes') return
     if (query.trim().length < 2) {
       setHits([])
       return
     }
-    const t = setTimeout(() => window.tide.search.query(query, 12).then(setHits), 120)
-    return () => clearTimeout(t)
-  }, [query])
+    let live = true
+    const quick = setTimeout(() => window.tide.search.query(query, 12).then((h) => live && setHits(h)), 120)
+    const deep = setTimeout(
+      () =>
+        window.tide.search
+          .hybrid(query, 12)
+          .then((h) => live && h.length > 0 && setHits(h))
+          .catch(() => {}),
+      350
+    )
+    return () => {
+      live = false
+      clearTimeout(quick)
+      clearTimeout(deep)
+    }
+  }, [query, scope])
+
+  // The offline reference: docs, CPython, cppreference, man pages, books
+  useEffect(() => {
+    if (scope !== 'reference') return
+    if (query.trim().length < 2) {
+      setRefHits(null)
+      return
+    }
+    let live = true
+    const t = setTimeout(
+      () =>
+        window.tide.reference
+          .lookup(query, undefined, 20)
+          .then((h) => live && setRefHits(h))
+          .catch(() => live && setRefHits([])),
+      150
+    )
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+  }, [query, scope])
 
   const results: Result[] = useMemo(() => {
     const open = (path: string, anchor?: string) => () => {
       onClose()
       app.openPath(path, anchor)
+    }
+    if (scope === 'reference') {
+      return (refHits ?? []).map<Result>((h) => ({
+        key: `r-${h.source}-${h.cite}`,
+        icon: h.source === 'cpython' ? 'terminal' : h.source === 'books' ? 'book' : 'library',
+        title: h.heading && h.heading !== h.title ? `${h.title} › ${h.heading}` : h.title,
+        sub: `${REF_LABELS[h.source]} · ${h.cite}`,
+        run: () => {
+          onClose()
+          app.openPath(refSourcePath(h))
+        }
+      }))
     }
     if (!query.trim()) {
       const actions: Result[] = [
@@ -89,9 +141,9 @@ export function SearchPalette({ onClose }: { onClose(): void }) {
       }
     }
     return [...titles, ...content, askAi]
-  }, [query, hits, app, onClose])
+  }, [query, hits, scope, refHits, app, onClose])
 
-  useEffect(() => setActive(0), [query])
+  useEffect(() => setActive(0), [query, scope])
   useEffect(() => {
     reveal(listRef.current?.querySelector('.active'), { block: 'nearest', behavior: 'auto' })
   }, [active])
@@ -104,10 +156,14 @@ export function SearchPalette({ onClose }: { onClose(): void }) {
           <input
             autoFocus
             value={query}
-            placeholder="Search notes, PDFs and saved pages"
+            placeholder={scope === 'notes' ? 'Search notes, PDFs and saved pages' : 'Search the Python docs, CPython, man pages and books'}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Escape') onClose()
+              if (e.key === 'Tab') {
+                e.preventDefault()
+                setScope((s) => (s === 'notes' ? 'reference' : 'notes'))
+              }
               if (e.key === 'ArrowDown') {
                 e.preventDefault()
                 setActive((a) => Math.min(results.length - 1, a + 1))
@@ -119,7 +175,16 @@ export function SearchPalette({ onClose }: { onClose(): void }) {
               if (e.key === 'Enter') results[active]?.run()
             }}
           />
+          <div className="segmented text small palette-scope" role="group" aria-label="Search in (Tab switches)">
+            <button className={scope === 'notes' ? 'on' : ''} onMouseDown={(e) => e.preventDefault()} onClick={() => setScope('notes')} aria-pressed={scope === 'notes'}>
+              Notes
+            </button>
+            <button className={scope === 'reference' ? 'on' : ''} onMouseDown={(e) => e.preventDefault()} onClick={() => setScope('reference')} aria-pressed={scope === 'reference'} title="Docs, source and books on this Mac (Tab)">
+              Reference
+            </button>
+          </div>
         </div>
+        {scope === 'reference' && refHits?.length === 0 && <p className="muted small palette-empty">Nothing in the reference matches. An identifier like __hash__ or PyLong_FromLong finds its definition.</p>}
         <ul className="palette-list" ref={listRef} role="listbox">
           {results.map((r, i) => (
             <li key={r.key} role="option" aria-selected={i === active}>

@@ -20560,3 +20560,34 @@ button.wkp-tile:hover {
 .coach-hours-total {
   flex: 1 1 320px;
 }
+
+/* Settings › Reference & data */
+.ref-meter {
+  display: block;
+  width: 180px;
+  max-width: 100%;
+  margin-top: 6px;
+}
+
+.ref-when {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A source file of the offline reference, read-only in the sheet */
+.ref-code {
+  height: calc(100vh - 170px);
+  min-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+
+.palette-scope {
+  flex-shrink: 0;
+}
+
+.palette-empty {
+  margin: 0;
+  padding: 14px 18px 4px;
+}

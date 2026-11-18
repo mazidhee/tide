@@ -20,7 +20,7 @@ import { WORK_TOOL_LINE } from './workProject'
 export type ToolPack = 'notes' | 'learner' | 'run' | 'data' | 'courses' | 'lesson' | 'chat' | 'maths' | 'graph' | 'metabase' | 'thread' | 'model' | 'work'
 
 export const PACK_TOOLS: Record<ToolPack, string[]> = {
-  notes: ['search_notes', 'read_note', 'related_notes'],
+  notes: ['search_notes', 'read_note', 'related_notes', 'reference_lookup'],
   learner: ['learner_profile', 'past_lessons', 'earlier_concepts', 'learner_standing'],
   run: ['run_code'],
   data: ['run_sql', 'load_table'],
@@ -125,24 +125,25 @@ export const THREAD_CORE = `You are Tide, the learner's tutor inside Tide, their
 /** One brief line per tool or close group, in the order they're listed; a line shows when any of its tools is given */
 const TOOL_LINES: { tools: string[]; line: string }[] = [
   { tools: ['search_notes', 'read_note', 'related_notes'], line: 'search_notes / read_note: their own notes, first. related_notes: how a note links to the rest and how well they know each.' },
-  { tools: ['learner_profile', 'past_lessons', 'earlier_concepts'], line: 'learner_profile (the full profile; a digest is below; with a topic, its misconceptions and past mistakes), past_lessons, earlier_concepts (what this builds on and how solid each is now): read them before re-teaching something they struggled with, and re-teach briefly what has faded before relying on it.' },
+  { tools: ['reference_lookup'], line: 'reference_lookup: for language rules, quote the official docs or CPython source and cite it.' },
+  { tools: ['learner_profile', 'past_lessons', 'earlier_concepts'], line: 'learner_profile (the full profile; a digest is below; with a topic, its misconceptions and past mistakes), past_lessons, earlier_concepts (what this builds on and how solid each is now): read them before re-teaching what they struggled with; briefly re-teach what has faded before relying on it.' },
   { tools: ['learner_standing'], line: 'learner_standing: how deep their grasp of a topic is (recall, apply, transfer, build) from real answers; pitch the step to it.' },
   { tools: ['learner_model'], line: 'learner_model: Tide\'s model of them: standing with evidence, what fades, the weakest concepts for a goal, what a topic is used in, transfer gaps, recent learning.' },
   { tools: ['run_code'], line: 'run_code: run each example before you show its output, test their code before you judge it, and check maths step by step with SymPy.' },
   { tools: ['run_sql', 'load_table'], line: 'run_sql / load_table: the SQLite lab (sample shop and product-analytics data; load_table adds their .csv or .tsv). Run every query before you show it, as a ```sql block they can run; draw a result with a ```chart block of JSON {"sql": "...", "type": "bar" | "line" | "scatter", "title": "..."}.' },
-  { tools: ['search_courses', 'read_course', 'search_transcripts'], line: 'search_courses / read_course / search_transcripts: the courses they imported and the videos they saved.' },
-  { tools: ['related_material'], line: 'related_material: once per new concept (unless a note already covers it), sections of their other courses and video moments that teach it. Bring in at most two or three that add something, each in your own words with where it\'s from, never a list of links; you may suggest one catalogue course with <suggest-course id="…">why</suggest-course>, never import one.' },
+  { tools: ['search_courses', 'read_course', 'search_transcripts'], line: 'search_courses / read_course / search_transcripts: their imported courses and saved videos.' },
+  { tools: ['related_material'], line: 'related_material: once per new concept (unless a note already covers it), sections of their other courses and video moments that teach it. Bring in at most two or three that add something, in your own words with where it\'s from, never a list of links; you may suggest a catalogue course with <suggest-course id="…">why</suggest-course>, never import one.' },
   { tools: ['show_in_view'], line: 'show_in_view: seek their video or scroll their page to what you point at. "What the student has on screen" in a message is what they\'re looking at: answer about it, pointing at moments as m:ss and sections by heading.' },
-  { tools: ['set_exercise', 'banked_exercise'], line: 'set_exercise / banked_exercise: practice exercises proven in Tide\'s sandbox before the learner sees one (the format rules say when).' },
-  { tools: ['terminal_read'], line: 'terminal_read: their Workspace or scratchpad terminal, read-only.' },
+  { tools: ['set_exercise', 'banked_exercise'], line: 'set_exercise / banked_exercise: practice exercises proven in Tide\'s sandbox before they see one (the format rules say when).' },
+  { tools: ['terminal_read'], line: 'terminal_read: their Workspace or scratchpad terminal (read-only).' },
   { tools: ['workspace_file'], line: 'workspace_file: make a file in their Workspace.' },
   { tools: ['lesson_progress'], line: 'lesson_progress: keeps the lesson map true (the instructions say when).' },
   { tools: ['schedule_recall', 'recall_due'], line: 'schedule_recall / recall_due: keep a missed idea as a question Tide brings back on a spaced schedule; see what is due on a topic.' },
   { tools: ['study_plan'], line: 'study_plan: their goal, focus and this week\'s plan.' },
   { tools: ['remember'], line: 'remember: one lasting fact about them (a goal, a deadline, how they like to learn) as a short third-person sentence; always when they say "remember that…".' },
   { tools: ['record_answer', 'make_flashcards'], line: 'record_answer: record a mark in What you know when you mark an answer here. make_flashcards: save cards for ideas worth keeping.' },
-  { tools: ['place_explorable', 'set_challenge', 'check_graph', 'explorable_library'], line: 'place_explorable / set_challenge / check_graph: check an explorable, prove a poke-holes challenge, check a graph; each hands back the block to paste. explorable_library: explorables already made and proven.' },
-  { tools: ['render_animation', 'animation_library'], line: 'render_animation / animation_library: a short narrated Manim animation from a tested template or your own scene (it hands back the block to paste); scenes of yours already proven.' },
+  { tools: ['place_explorable', 'set_challenge', 'check_graph', 'explorable_library'], line: 'place_explorable / set_challenge / check_graph: check an explorable, prove a poke-holes challenge, check a graph; each returns the block to paste. explorable_library: explorables already made and proven.' },
+  { tools: ['render_animation', 'animation_library'], line: 'render_animation / animation_library: a short narrated Manim animation from a tested template or your own scene (it returns the block to paste); scenes of yours already proven.' },
   { tools: ['metabase'], line: 'metabase: their company Metabase, read-only. Start with action map; run saved questions, pipelines or SELECTs to show real numbers. If they ask you to create or change something there, show them how to do it themselves.' },
   { tools: ['work_project', 'practice_metabase'], line: WORK_TOOL_LINE },
   { tools: ['save_to_notes'], line: 'save_to_notes: save a point to their notes for this lesson.' }

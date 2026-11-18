@@ -46,7 +46,17 @@ const api: TideApi = {
     onChange: (cb) => subscribe<string[]>('vault:changed', cb)
   },
   search: {
-    query: invoke('search:query')
+    query: invoke('search:query'),
+    hybrid: invoke('search:hybrid')
+  },
+  reference: {
+    status: invoke('reference:status'),
+    rebuild: invoke('reference:rebuild'),
+    lookup: invoke('reference:lookup'),
+    page: invoke('reference:page'),
+    file: invoke('reference:file'),
+    openFolder: invoke('reference:openFolder'),
+    onProgress: (cb) => subscribe<import('../shared/reference').ReferenceStatus>('reference:progress', cb)
   },
   code: {
     list: invoke('code:list'),

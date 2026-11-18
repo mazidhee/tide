@@ -21,6 +21,7 @@ import { SpeedView } from './SpeedView'
 import { ProfileSettings } from './ProfileSettings'
 import { BackupsSettings } from './BackupsSettings'
 import { PracticeSettings } from './PracticeSettings'
+import { ReferenceSettings } from './ReferenceSettings'
 import { UsageView } from './UsageView'
 import { ConnectionsView } from './ConnectionsView'
 import { LAB_PACK, QUANT_PACK } from '@shared/labPack'
@@ -73,7 +74,7 @@ const ACCENTS = [
 
 const LOCAL_SEARCH = 'http://127.0.0.1:8888'
 
-export type Section = 'you' | 'general' | 'backups' | 'appearance' | 'tutor' | 'study' | 'practice' | 'connections' | 'models' | 'tools' | 'usage' | 'speed'
+export type Section = 'you' | 'general' | 'backups' | 'appearance' | 'tutor' | 'study' | 'practice' | 'reference' | 'connections' | 'models' | 'tools' | 'usage' | 'speed'
 
 export const SECTIONS: { id: Section; label: string; icon: IconName; group: string; description: string }[] = [
   { id: 'you', label: 'You', icon: 'person', group: 'App', description: 'Your name and picture. Kept on this Mac, never sent anywhere.' },
@@ -83,6 +84,7 @@ export const SECTIONS: { id: Section; label: string; icon: IconName; group: stri
   { id: 'tutor', label: 'Tutor and voice', icon: 'tutor', group: 'Learning', description: 'Who teaches you, and how they sound.' },
   { id: 'study', label: 'Study time', icon: 'timer', group: 'Learning', description: 'Timers and breaks while you study.' },
   { id: 'practice', label: 'Practice data', icon: 'flask', group: 'Learning', description: 'Your own MongoDB and Metabase on this Mac, with practice data for guided work projects. Yours to break.' },
+  { id: 'reference', label: 'Reference & data', icon: 'library', group: 'Learning', description: 'Docs, source and books on this Mac that the tutor quotes, the datasets for practice, and the index that searches by meaning.' },
   { id: 'connections', label: 'Connections', icon: 'link', group: 'AI', description: 'Every service Tide uses: what it’s for, where it runs, what it used today, and what you could add.' },
   { id: 'models', label: 'Models', icon: 'sparkle', group: 'AI', description: 'Who teaches: Claude on your plan for everything, with Gemma on this Mac when Claude can’t answer or you pick it.' },
   { id: 'tools', label: 'Tools', icon: 'terminal', group: 'AI', description: 'What the tutor can use: search, code and your tasks.' },
@@ -1814,6 +1816,7 @@ export function SettingsView({ section = 'general' }: { section?: Section | 'ai'
         {tab === 'general' && <GeneralSection />}
         {tab === 'backups' && <BackupsSettings />}
         {tab === 'practice' && <PracticeSettings />}
+        {tab === 'reference' && <ReferenceSettings />}
         {tab === 'appearance' && <AppearanceSection />}
         {tab === 'tutor' && <TutorSection />}
         {tab === 'study' && <StudySection />}

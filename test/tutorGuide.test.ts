@@ -29,7 +29,7 @@ const names = async (key: string, packs?: string) => (await mcp.toolsFor(key, pa
 describe('which tools a session is given', () => {
   it('a side thread gets a handful; a history lesson no maths, data or chat tools; a maths lesson its maths tools', () => {
     const tools = (s: Parameters<typeof G.toolPacks>[0]) => [...G.packTools(G.toolPacks(s))]
-    expect(tools({ kind: 'thread' }).sort()).toEqual(['read_note', 'related_notes', 'run_code', 'save_to_notes', 'search_notes'])
+    expect(tools({ kind: 'thread' }).sort()).toEqual(['read_note', 'reference_lookup', 'related_notes', 'run_code', 'save_to_notes', 'search_notes'])
     expect(tools({ kind: 'thread', data: true })).toContain('run_sql')
     const history = tools({ kind: 'lesson', humanities: true })
     expect(history).toEqual(expect.arrayContaining(['set_exercise', 'lesson_progress', 'learner_profile', 'search_notes']))
@@ -62,7 +62,7 @@ describe('which tools a session is given', () => {
     const all = await names('lab:x')
     expect(all.length).toBeGreaterThan(25)
     const thread = await names('thread:x', G.packsHeader(G.toolPacks({ kind: 'thread' })))
-    expect(thread.sort()).toEqual(['read_note', 'related_notes', 'run_code', 'save_to_notes', 'search_notes'])
+    expect(thread.sort()).toEqual(['read_note', 'reference_lookup', 'related_notes', 'run_code', 'save_to_notes', 'search_notes'])
     const history = await names('lab:x', G.packsHeader(G.toolPacks({ kind: 'lesson', humanities: true })))
     expect(history.length).toBeLessThan(all.length - 8)
     expect(history).not.toContain('place_explorable')

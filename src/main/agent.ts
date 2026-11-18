@@ -41,7 +41,7 @@ import { explainerToolResult, findExplainers } from '@shared/explainers'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
-import { aboutSql, dataFiles, ensureFinanceTables, labSchemaNote, loadHint, loadTableTool, runSqlTool } from './lab'
+import { aboutSql, dataFiles, ensureDatasetTables, ensureFinanceTables, labSchemaNote, loadHint, loadTableTool, runSqlTool } from './lab'
 import { wantsFinanceTables } from '@shared/finance/labs'
 import { looksAtLabFirst } from '@shared/sqlCheck'
 import { toolArgs } from '@shared/modelText'
@@ -80,7 +80,16 @@ const tool = (name: string, description: string, properties: Record<string, unkn
 const NOTE_TOOLS = [
   tool('search_notes', "Search the student's notes. Returns matching passages.", { query: { type: 'string' } }, ['query']),
   tool('read_note', "Read one of the student's notes in full, by its path from search_notes.", { path: { type: 'string' } }, ['path']),
-  tool('related_notes', "How one of the student's notes connects to their other notes, with how well they know each. Takes the note's path or title.", { note: { type: 'string' } }, ['note'])
+  tool('related_notes', "How one of the student's notes connects to their other notes, with how well they know each. Takes the note's path or title.", { note: { type: 'string' } }, ['note']),
+  tool(
+    'reference_lookup',
+    'Search the offline reference on this Mac: the official Python 3.15 docs, the CPython 3.15 source (C and Python, function by function, with file:line), cppreference, the Linux man pages and open textbooks (Think Python, Composing Programs, SICP, Python Data Science Handbook). For language rules and how Python really works, quote the docs or the source from here and cite it as given (reference/datamodel.html#object.__hash__, Objects/longobject.c:120); never cite from memory.',
+    {
+      query: { type: 'string', description: 'Words or an identifier, e.g. "__hash__ __eq__", "PyLong digits", "std::vector reserve", "fork"' },
+      source: { type: 'string', enum: ['python-docs', 'cpython', 'cpp', 'man', 'books'], description: 'Optional: one source only' }
+    },
+    ['query']
+  )
 ]
 
 /** Real pictures to teach with; the model drops the line it returns straight into its answer */
@@ -982,7 +991,8 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const q = str('query')
     const id = ctx.step({ kind: 'search_notes', label: `Searching your notes for “${q}”`, status: 'running', depth })
     await indexReady()
-    const hits = await search(q, 6)
+    // By words and by meaning when the embedding index is there (main/embeddings); by words alone otherwise
+    const hits = await import('./embeddings').then((m) => m.hybridSearch(q, 6)).catch(() => search(q, 6))
     ctx.updateStep(id, { status: 'done', detail: `${hits.length} passages` })
     if (!hits.length) return 'No matching passages in the notes.'
     return hits
@@ -991,6 +1001,17 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
         return `[${n}] ${h.title}${h.heading ? ` > ${h.heading}` : ''} (path: ${h.path})\n${clip(h.text, 900)}`
       })
       .join('\n\n')
+  }
+
+  if (call.name === 'reference_lookup') {
+    const q = str('query')
+    const source = (['python-docs', 'cpython', 'cpp', 'man', 'books'] as const).find((x) => x === str('source'))
+    const id = ctx.step({ kind: 'search_notes', label: `Looking up “${q}” in the reference`, status: 'running', depth })
+    const { lookupReference } = await import('./reference')
+    const { REF_LABELS, refSourcePath, refToolText } = await import('@shared/reference')
+    const hits = await lookupReference(q, source, 5).catch(() => [])
+    ctx.updateStep(id, { status: 'done', detail: hits.length ? hits.map((h) => h.cite).slice(0, 2).join(', ') : 'nothing found' })
+    return refToolText(hits, q, (h) => addSource(ctx, { path: refSourcePath(h), title: `${REF_LABELS[h.source]}: ${h.cite}`, heading: h.heading || undefined, text: clip(h.text, 1200) }))
   }
 
   if (call.name === 'read_note') {
@@ -1296,7 +1317,12 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const sql = String(args.sql ?? '')
     const firstLine = sql.split('\n').find((l) => l.trim() && !l.trim().startsWith('--'))?.trim() ?? ''
     const id = ctx.step({ kind: 'run_sql', label: `Running SQL${firstLine ? `: ${firstLine.slice(0, 60)}` : ''}`, status: 'running', depth })
-    const r = /^postgres(ql)?$/i.test(str('engine')) ? await (await import('./packs/postgres')).runPgTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql, str('session') || undefined) : runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql)
+    const r = /^postgres(ql)?$/i.test(str('engine')) ? await (await import('./packs/postgres')).runPgTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql, str('session') || undefined) : await ensureDatasetTables(ctx.labId ?? ctx.chatId ?? 'scratch', sql)
+          .catch(() => [] as string[])
+          .then((loaded) => {
+            const r = runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql)
+            return loaded.length ? { ...r, text: `Loaded ${loaded.join(', ')} into the lab.\n${r.text}` } : r
+          })
     ctx.updateStep(id, { status: r.ok ? 'done' : 'error', detail: r.detail })
     return clip(r.text, TOOL_TEXT_LIMIT)
   }
@@ -1340,6 +1366,9 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
 
   return `Unknown tool ${call.name}.`
 }
+
+/** Whether a lesson works with data in Python or ML, so real datasets are worth naming */
+const aboutData = (text: string) => /\b(pandas|dataframes?|numpy|scikit|sklearn|machine learning|regression|classification|classifier|feature engineering|data (analysis|science|cleaning)|eda|duckdb|parquet|dataset)\b/i.test(text)
 
 /**
  * The tools a turn offers, in a fixed order. The warm-ups build theirs here too: the tools are part
@@ -1832,9 +1861,14 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const financeLab = !!req.session && !!req.instructions && wantsFinanceTables(req.topic ?? '')
   if (financeLab) ensureFinanceTables(req.labId ?? req.chatId ?? 'scratch')
   const labNote = req.session && req.instructions && !mbLesson && (financeLab || aboutSql(`${req.topic ?? ''} ${question}`)) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', dataFiles()) : ''
+  // A lesson on SQL, pandas or ML is told what real datasets are on this Mac, so it can teach on real data (main/datasets)
+  const datasetNote = req.session && req.instructions && !mbLesson && (labNote || aboutData(`${req.topic ?? ''} ${question}`)) ? await import('./datasets').then((m) => m.datasetCatalogueText()).catch(() => '') : ''
   // ...and looks at the data with run_sql before it sets or marks anything: told to, Gemma never
   // did (no tool call in any SQL lesson turn of the rehearsal), so the turn's first step is that call
   if (labNote && looksAtLabFirst(String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''))) ctx.firstTool = 'run_sql'
+  // A question about what the docs or the source say: the turn's first step is the lookup (Gemma answered the second such question from memory, with a wrong file)
+  const refHint = (await import('@shared/reference')).referenceHint(question)
+  if (refHint && !ctx.firstTool) ctx.firstTool = 'reference_lookup'
   const turnContext = [
     req.voice ? voiceRules(characterById(req.voice), recentOpenings(req.messages.filter((m) => m.role === 'assistant').map((m) => String(m.content)))) : '',
     req.instructions ? '' : toolHint(question, ctx.web),
@@ -1858,8 +1892,10 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     metabaseNote,
     // Claude's process keeps the lesson: the lab's tables are told once, with the first message (Gemma's turns are rebuilt, so it rides each one)
     engine === 'claude' && userTurns > 1 ? '' : labNote,
+    engine === 'claude' && userTurns > 1 ? '' : datasetNote,
     // Asked to load one of their files: which tool, and the path (in a lesson too)
     loadHint(question, /\.(csv|tsv)\b|\b(csv|tsv|my data|spreadsheet)\b/i.test(question) ? dataFiles() : []),
+    refHint,
     own.length ? `Where this is covered in books the student owns (they open in Tide; point them to the pages when it helps, as a markdown link like [${readingLabel(own[0])}](/${own[0].path.split('/').map(encodeURIComponent).join('/')}#page=${own[0].from})): ${own.map(readingLabel).join('; ')}` : '',
     images.length ? `You can see ${images.length === 1 ? 'the picture' : `these ${images.length} pictures`} from their notes, attached below in this order: ${images.map((im, i) => `${i + 1}) ${im.path}`).join(', ')}. Teach from what they show. To show one in your answer, put its line on its own exactly as written: ${images.map((im) => imageMarkdown(im.path)).join(' ')}` : '',
     figures.length ? `The PDF ${figures.length === 1 ? 'page' : 'pages'} these passages come from ${figures.length === 1 ? 'has' : 'have'} figures, so ${figures.length === 1 ? 'a picture of it is' : 'pictures of them are'} attached below${images.length ? ', after their own pictures' : ''}: ${figures.map((f) => `page ${f.page} of ${f.file.split('/').pop()}`).join(', ')}. Read the figures (diagrams, charts, tables drawn as pictures) as part of the source, and refer to them by page when you teach from them.` : ''
