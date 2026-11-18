@@ -978,6 +978,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
         emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: /fetch/i.test(e.name) ? 'read_webpage' : 'web_search', label: e.name, status: 'done', depth: 0 } })
       }
   }
+  emit({ id: req.id, type: 'model', model: `Claude ${claudeLabel(model)}` })
   try {
     // A process holding some other history starts again, from the transcript
     if (fresh && proc.alive && proc.turns > 0) proc.stop()
@@ -994,6 +995,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
       result = await proc.turn(withPictures(again.content + markNote + seeNote + runNote), model, onEvent, signal, cut, effort)
     }
     proc.turns = users
+    // The model Claude Code says answered, when that isn't the one asked for
+    if (result.model && claudeLabel(result.model) !== claudeLabel(model)) emit({ id: req.id, type: 'model', model: `Claude ${claudeLabel(result.model)}` })
     const turnCost = Math.max(0, result.usage.costUsd - proc.costSoFar)
     proc.costSoFar = result.usage.costUsd
     result.usage.costUsd = turnCost

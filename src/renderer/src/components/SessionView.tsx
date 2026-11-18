@@ -170,6 +170,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const termIdRef = useRef<string | null>(null)
   const app = useApp()
   const [turns, setTurns] = useState<Turn[]>([])
+  // The model that answered the last reply, for the picker's Auto
+  const [answeredBy, setAnsweredBy] = useState<string>()
   // Side threads under the tutor's outputs (shared/lessonThreads): kept apart from the turns
   const [threads, setThreads] = useState<LessonThread[]>([])
   const threadsRef = useRef(threads)
@@ -268,6 +270,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     () =>
       window.tide.ai.onEvent((e) => {
         if (e.id !== activeId.current) return
+        if (e.type === 'model') return setAnsweredBy(e.model)
         setTurns((list) => {
           const last = list[list.length - 1]
           if (!last || last.role !== 'assistant') return list
@@ -2220,7 +2223,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             )}
             <div className="lw-menu-row">
               <span>Tutor</span>
-              <EnginePill value={engine} onChange={setEngine} />
+              <EnginePill value={engine} onChange={setEngine} answeredBy={answeredBy} />
             </div>
             <button
               className="lw-menu-row"

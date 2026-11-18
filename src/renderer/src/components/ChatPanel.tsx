@@ -201,7 +201,7 @@ export function ChatPanel({ variant = 'panel' }: { variant?: 'panel' | 'dock' } 
             </span>
           )}
         </div>
-        <Composer value={input} onChange={setInput} onSend={() => send(input)} busy={busy} onStop={convo.stop} web={convo.web} onWeb={convo.setWeb} attachment={attachment} onClearAttachment={() => setAttachment(undefined)} inputRef={inputRef} />
+        <Composer answeredBy={convo.answeredBy} value={input} onChange={setInput} onSend={() => send(input)} busy={busy} onStop={convo.stop} web={convo.web} onWeb={convo.setWeb} attachment={attachment} onClearAttachment={() => setAttachment(undefined)} inputRef={inputRef} />
       </aside>
     )
   }
@@ -288,6 +288,7 @@ export function ChatPanel({ variant = 'panel' }: { variant?: 'panel' | 'dock' } 
 
       {screenChip}
       <Composer
+        answeredBy={convo.answeredBy}
         value={input}
         onChange={setInput}
         onSend={() => send(input)}

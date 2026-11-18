@@ -163,6 +163,7 @@ export function LabView({ kind, topic: initialTopic }: { kind: 'lab' | 'local'; 
               ))}
             </div>
             <Composer
+              answeredBy={convo.answeredBy}
               value={input}
               onChange={setInput}
               onSend={() => send(input)}
