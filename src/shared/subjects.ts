@@ -23,6 +23,7 @@ import { GRAPH_BRIEF } from './graphSpec'
 import { mathsMode } from './mathsMode'
 import { HUMANITIES_RULES, THEOLOGY_RULES, humanitiesArea } from './humanities'
 import { financeLabNote } from './finance/labs'
+import { PYTHON_LAB_LINE } from './pyLab'
 import { SUBJECTS, SUBJECT_KINDS, type Need, type SubjectEntry, type SubjectKind } from './subjectMap'
 
 export type { SubjectKind } from './subjectMap'
@@ -270,6 +271,11 @@ Systems depth is the default, not the exception: objects and references, the sta
 Order each step: the big picture, the mechanism drawn, shown running in the workspace, one level deeper, then think questions and a checkpoint.`
 
 const LANGUAGES = /\b(python|cpython|cpp|rust|golang|java|javascript|typescript|swift|haskell|ocaml|zig)\b|\bc\+\+|\b(in|with|using|learn|learning) C\b(?![+#])|^C\b(?![+#])\s*[:,-]|\bC (language|programming|pointers|strings|arrays|structs|memory)\b/i
+/** A lesson on Python itself, where the Python lab (shared/pyLab) shows the interpreter at work */
+export function isPythonTopic(topic: string, notebook?: string): boolean {
+  return /\b(c?python)\b/i.test(topic) || (!!notebook && /\bpython\b/i.test(notebook))
+}
+
 /** A lesson on a programming language itself (Python, C, C++, Rust…), from its topic or notebook */
 export function isLanguageTopic(topic: string, notebook?: string): boolean {
   return LANGUAGES.test(topic) || (!!notebook && /\b(python|cpp|rust)\b|\bc\+\+/i.test(notebook))
@@ -306,6 +312,7 @@ export function lessonKit(topic: string, profile?: SubjectProfile, notebook?: st
   const taught = p.kinds
   const parts = taught.map((k) => TOOLKITS[k].rules)
   if (handsOn && isLanguageTopic(topic, notebook)) parts.push(LANGUAGE_DEPTH)
+  if (handsOn && isPythonTopic(topic, notebook)) parts.push(PYTHON_LAB_LINE)
   if (p.lab && !handsOn) parts.push(LAB_LINE)
   // Finance, payments and quant: the lab that fits (its simulation is in `sims`; this is the Python helper and the tables)
   const finance = financeLabNote(topic)

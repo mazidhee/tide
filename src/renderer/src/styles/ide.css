@@ -3254,7 +3254,8 @@ button.ix-status-item:hover {
 
 /* A signature in Quick Help or Claude's reply isn't a program to run */
 .ix-help .run-code,
-.ix-help .copy-code {
+.ix-help .copy-code,
+.ix-help .step-code {
   display: none;
 }
 

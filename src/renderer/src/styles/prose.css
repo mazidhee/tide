@@ -293,8 +293,32 @@
   right: 112px;
 }
 
+/* Python blocks: Step through opens them in the Python lab (lib/pyLab) */
+.step-code {
+  position: absolute;
+  top: 5px;
+  right: 112px;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 5px;
+  color: var(--ink-soft);
+  background: var(--bg-hover);
+}
+
+.step-code:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.prose pre[data-lang]:has(.step-code)::before {
+  right: 208px;
+}
+
 /* A question is still waiting on this code ("What does this print?"): no Run until it's answered */
-.run-held .run-code {
+.run-held .run-code,
+.run-held .step-code {
   display: none;
 }
 

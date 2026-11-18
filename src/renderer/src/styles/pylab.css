@@ -1,0 +1,814 @@
+/*
+  The Python lab (lib/pyLab.ts): a program stepped through with its code, bytecode, call stack and
+  objects beside each other. One quiet card like the data lab's; every colour is a theme token.
+  The marks: the accent for what runs now, a soft fill for callers and the past, --series-3 for
+  what a step made, --series-4 for what it changed.
+*/
+
+.pylab {
+  container-type: inline-size;
+  margin: 0 0 1.05em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--ink);
+  text-align: left;
+  outline: none;
+}
+
+.pylab:focus-visible {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.pylab [hidden] {
+  display: none !important;
+}
+
+.pylab button {
+  font-family: var(--font-ui);
+}
+
+/* In tutor text the lab sits inside .prose: none of its code and pre styling applies here */
+.pylab code,
+.prose .pylab code {
+  font-family: var(--font-code);
+  font-size: inherit;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.prose .pylab pre {
+  position: static;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 12px;
+  overflow: auto;
+}
+
+/* ---------- Bar and editor ---------- */
+
+.pylab-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pylab-lang {
+  font-size: var(--text-2xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.pylab-ver,
+.pylab-status {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.pylab-ver:not(:empty)::before {
+  content: '·';
+  margin-right: 8px;
+}
+
+.pylab-space {
+  flex: 1;
+}
+
+.pylab-watch {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  background: var(--accent-soft);
+}
+
+.pylab-editor {
+  border-bottom: 1px solid var(--line);
+  background: var(--code-bg);
+}
+
+.pylab-src {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 14px;
+  border: 0;
+  resize: vertical;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-code);
+  font-size: 12.5px;
+  line-height: 20px;
+  tab-size: 4;
+  outline: none;
+}
+
+/* ---------- Controls ---------- */
+
+.pylab-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pylab-ctl {
+  min-width: 30px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: var(--radius-s);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--bg-hover);
+  font-variant-numeric: tabular-nums;
+}
+
+.pylab-ctl:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--ink);
+}
+
+.pylab-ctl:disabled {
+  opacity: 0.4;
+}
+
+.pylab-play {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.pylab-play:hover:not(:disabled) {
+  color: var(--accent-ink);
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+
+.pylab-mode {
+  margin-left: 6px;
+}
+
+.pylab-slider {
+  flex: 1;
+  min-width: 90px;
+  accent-color: var(--accent);
+}
+
+.pylab-count {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Panes ---------- */
+
+.pylab-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container (min-width: 720px) {
+  .pylab-panes {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  }
+  .pylab-code,
+  .pylab-stack {
+    border-right: 1px solid var(--line);
+  }
+}
+
+.pylab-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.pylab-pane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px 4px;
+}
+
+.pylab-pane-title {
+  font-size: var(--text-2xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.pylab-pane-sub {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pylab-pane-body {
+  position: relative;
+  overflow: auto;
+  max-height: 300px;
+  padding: 2px 8px 10px;
+}
+
+.pylab-empty {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+/* The code */
+
+.pylab-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-code);
+  font-size: 12.5px;
+  line-height: 20px;
+}
+
+.pylab-line {
+  display: flex;
+  border-radius: var(--radius-s);
+}
+
+.pylab-ln {
+  flex: none;
+  width: 30px;
+  padding-right: 10px;
+  text-align: right;
+  color: var(--ink-muted);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.pylab-lt {
+  white-space: pre;
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  padding: 0;
+}
+
+.pylab-line.now {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.pylab-line.now .pylab-ln {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.pylab-line.returning {
+  background: color-mix(in srgb, var(--series-3) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--series-3);
+}
+
+.pylab-line.raising {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.pylab-line.caller {
+  background: var(--bg-hover);
+  box-shadow: inset 3px 0 0 var(--line-strong);
+}
+
+.pylab-line.viewing {
+  background: var(--bg-active);
+}
+
+/* The bytecode */
+
+.pylab-optable {
+  font-family: var(--font-code);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.pylab-opgroup {
+  display: flex;
+  border-top: 1px dashed var(--line);
+  padding: 2px 0;
+}
+
+.pylab-opgroup:first-child {
+  border-top: 0;
+}
+
+.pylab-opline {
+  flex: none;
+  width: 26px;
+  padding-right: 8px;
+  text-align: right;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pylab-oprows {
+  flex: 1;
+  min-width: 0;
+}
+
+.pylab-op {
+  display: grid;
+  grid-template-columns: 52px minmax(0, max-content) minmax(0, 1fr);
+  gap: 10px;
+  padding: 0 6px;
+  border-radius: var(--radius-s);
+  white-space: nowrap;
+}
+
+.pylab-off {
+  text-align: right;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pylab-opname {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pylab-oparg {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pylab-op.past .pylab-opname {
+  color: var(--ink-soft);
+}
+
+.pylab-op.now,
+.pylab-op.done {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.pylab-op.now .pylab-opname,
+.pylab-op.done .pylab-opname {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.pylab-op.waiting {
+  background: var(--bg-active);
+  box-shadow: inset 3px 0 0 var(--line-strong);
+}
+
+.pylab-opnote {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0 8px 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-s);
+  background: var(--bg-inset);
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.pylab-opnote:empty {
+  display: none;
+}
+
+.pylab-opnote-name {
+  flex: none;
+  font-family: var(--font-code);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--ink);
+  background: none;
+  padding: 0;
+}
+
+/* The call stack */
+
+.pylab-frames {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 4px;
+}
+
+.pylab-frame {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--bg-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.pylab-frame:hover {
+  border-color: var(--line-strong);
+}
+
+.pylab-frame.top {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.pylab-frame.viewing {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.pylab-frame:not(.top) {
+  background: var(--bg-hover);
+}
+
+.pylab-frame-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.pylab-frame-name {
+  font-family: var(--font-code);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.pylab-frame-line {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.pylab-names,
+.pylab-attrs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pylab-attr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border-radius: var(--radius-s);
+}
+
+.pylab-attr.rebound {
+  background: color-mix(in srgb, var(--series-4) 16%, transparent);
+}
+
+.pylab-name {
+  flex: none;
+  min-width: 44px;
+  font-family: var(--font-code);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.pylab-ret .pylab-name {
+  color: var(--series-3);
+  font-weight: 650;
+}
+
+/* A reference: an atom's value, or a type and short id */
+
+.pylab-ref {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  font-family: var(--font-code);
+  font-size: 11.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.pylab-ref-v,
+.pylab-ref-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+
+.pylab-ref-t {
+  color: var(--accent);
+}
+
+.pylab-ref-id {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+
+.pylab-ref.fresh {
+  border-color: color-mix(in srgb, var(--series-3) 60%, transparent);
+}
+
+.pylab-ref.lit,
+.pylab-obj.lit {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* Objects */
+
+.pylab-objs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 4px;
+}
+
+.pylab-atoms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+.pylab-obj {
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--bg-raised);
+}
+
+.pylab-obj.fresh {
+  border-color: color-mix(in srgb, var(--series-3) 60%, transparent);
+  animation: pylab-in 380ms ease-out;
+}
+
+.pylab-obj.changed {
+  border-color: color-mix(in srgb, var(--series-4) 70%, transparent);
+  animation: pylab-in 380ms ease-out;
+}
+
+@keyframes pylab-in {
+  from {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--series-3) 22%, transparent);
+  }
+}
+
+:root[data-model-busy] .pylab-obj {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pylab-obj {
+    animation: none;
+  }
+}
+
+.pylab-obj-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-hover);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.pylab-obj-t {
+  font-family: var(--font-code);
+  font-weight: 650;
+  color: var(--accent);
+}
+
+.pylab-obj-id {
+  font-family: var(--font-code);
+  color: var(--ink-muted);
+}
+
+.pylab-obj-sz {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.pylab-tag {
+  padding: 0 5px;
+  border-radius: 999px;
+  font-weight: 650;
+  color: var(--series-3);
+  background: color-mix(in srgb, var(--series-3) 14%, transparent);
+}
+
+.pylab-tag.cached {
+  font-weight: 500;
+  color: var(--ink-muted);
+  background: var(--bg-active);
+}
+
+.pylab-tag.changed {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--series-4) 18%, transparent);
+}
+
+.pylab-obj-body {
+  padding: 5px 8px 6px;
+}
+
+.pylab .pylab-val {
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.pylab-obj-note {
+  margin-top: 3px;
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.pylab-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.pylab-slot {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pylab-slot.spare {
+  width: 22px;
+  height: 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+}
+
+.pylab-idx {
+  font-size: 10px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pylab-colon {
+  color: var(--ink-muted);
+}
+
+.pylab-items:has(.pair) {
+  flex-direction: column;
+}
+
+.pylab-digits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.pylab-digits .pylab-obj-note {
+  margin: 0;
+}
+
+.pylab .pylab-digit {
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--bg-inset);
+}
+
+.pylab-obj.atom .pylab-obj-body .pylab-obj-id {
+  margin-top: 1px;
+  font-size: var(--text-2xs);
+}
+
+/* Output */
+
+.pylab-out {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 14px 10px;
+}
+
+.pylab-out-text {
+  flex: 1;
+  margin: 0;
+  max-height: 96px;
+  overflow: auto;
+  font-family: var(--font-code);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.pylab-err {
+  margin: 0 10px 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-s);
+  font-family: var(--font-code);
+  font-size: 12px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+}
+
+.pylab.running .pylab-panes {
+  opacity: 0.55;
+}
+
+/* ---------- The lab's own page (components/PyLabView) ---------- */
+
+.pylab-page .page-inner {
+  max-width: 1280px;
+}
+
+.pylab-page-head {
+  margin-bottom: 18px;
+}
+
+.pylab-page-sub {
+  max-width: 68ch;
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+}
+
+.pylab-page-grid {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.pylab-starters {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pylab-starters .pylab-pane-title {
+  padding: 0 10px 6px;
+}
+
+.pylab-starter {
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.pylab-starter:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.pylab-starter.on {
+  background: var(--bg-active);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.pylab-page-lab .pylab-pane-body {
+  max-height: 380px;
+}
+
+@media (max-width: 900px) {
+  .pylab-page-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pylab-starters {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
