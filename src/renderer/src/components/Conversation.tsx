@@ -386,7 +386,8 @@ export function TurnView({
     const cite = (e.target as HTMLElement).closest<HTMLElement>('.cite')
     if (!cite || !t.sources) return
     const src = t.sources.find((s) => s.index === Number(cite.dataset.cite))
-    if (src?.url) window.tide.app.openExternal(src.url)
+    if (src?.path?.startsWith('ref:')) app.openPath(src.path)
+    else if (src?.url) window.tide.app.openExternal(src.url)
     else if (src) app.openPath(src.path, src.heading)
   }
   const breakLine = showSummaryBreak ? (

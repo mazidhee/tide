@@ -26,14 +26,19 @@ async function searchedConcepts(topic: string): Promise<Map<string, number>> {
     const lessons = await listLessons()
     const byPage = new Map(lessons.filter((l) => l.page).map((l) => [l.page, l]))
     if (!byPage.size) return out
-    const hits = await search(topic, 40, (p) => byPage.has(p))
+    // By words and by meaning (main/embeddings): a lesson page close in meaning counts like a keyword hit
+    const [hits, near] = await Promise.all([search(topic, 40, (p) => byPage.has(p)), import('./embeddings').then((m) => m.semanticSearch(topic, 40, ['note', 'lesson'], 8_000)).catch(() => [])])
     const top = hits[0]?.score ?? 0
-    if (!top) return out
-    for (const h of hits) {
-      const l = byPage.get(h.path)
-      if (!l || normName(l.topic) === normName(topic)) continue
-      const id = await conceptOfTopic(l.topic)
-      if (id) out.set(id, Math.max(out.get(id) ?? 0, h.score / top))
+    const byId = new Map(lessons.map((l) => [l.id, l]))
+    const scored: { topic: string; score: number }[] = top ? hits.filter((h) => byPage.has(h.path)).map((h) => ({ topic: byPage.get(h.path)!.topic, score: h.score / top })) : []
+    for (const n of near) {
+      const l = n.item.kind === 'lesson' ? byId.get(n.item.key.slice('lesson:'.length)) : byPage.get(n.item.path)
+      if (l && n.sim >= 0.45) scored.push({ topic: l.topic, score: Math.min(1, (n.sim - 0.35) / 0.35) })
+    }
+    for (const h of scored) {
+      if (normName(h.topic) === normName(topic)) continue
+      const id = await conceptOfTopic(h.topic)
+      if (id) out.set(id, Math.max(out.get(id) ?? 0, h.score))
     }
   } catch {
     // No index yet: names and the roadmap still decide

@@ -12,6 +12,7 @@
  * "Open in browser" is only ever an explicit, secondary action. Pure, so it can be tested.
  */
 import { linkTime, youtubeIdOf } from './video'
+import type { RefSource } from './reference'
 
 export interface RepoRef {
   /** "owner/name" */
@@ -34,6 +35,8 @@ export type LinkTarget =
   | { kind: 'web'; url: string }
   /** A heading on the page being read */
   | { kind: 'anchor'; id: string }
+  /** A page or source file of the offline reference (shared/reference), at a section or a line */
+  | { kind: 'reference'; source: RefSource; path: string; anchor?: string; line?: number }
   /** mailto: and tel: hand over to the Mac (there is nothing to show in Tide) */
   | { kind: 'system'; url: string }
 
@@ -214,6 +217,7 @@ export function sameTarget(a: LinkTarget, b: LinkTarget): boolean {
   if (a.kind === 'course-file' && b.kind === 'course-file') return a.course === b.course && a.path === b.path
   if (a.kind === 'github-file' && b.kind === 'github-file') return a.repo === b.repo && a.path === b.path
   if (a.kind === 'youtube' && b.kind === 'youtube') return a.id === b.id
+  if (a.kind === 'reference' && b.kind === 'reference') return a.source === b.source && a.path === b.path
   if (a.kind === 'web' && b.kind === 'web') return a.url.replace(/#.*$/, '') === b.url.replace(/#.*$/, '')
   return false
 }

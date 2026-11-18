@@ -702,6 +702,18 @@ export interface TideApi {
   }
   search: {
     query(q: string, limit?: number): Promise<SearchHit[]>
+    /** Keyword and semantic search fused (main/embeddings); may include lesson records under .tide/ */
+    hybrid(q: string, limit?: number): Promise<SearchHit[]>
+  }
+  /** The offline reference and datasets (main/reference, shared/reference) */
+  reference: {
+    status(): Promise<import('./reference').ReferenceStatus>
+    rebuild(): Promise<void>
+    lookup(q: string, source?: import('./reference').RefSource, limit?: number): Promise<import('./reference').RefHit[]>
+    page(source: import('./reference').RefSource, path: string): Promise<{ title: string; html: string } | null>
+    file(source: import('./reference').RefSource, path: string): Promise<{ abs: string; text: string } | null>
+    openFolder(which: 'reference' | 'datasets'): Promise<string>
+    onProgress(cb: (s: import('./reference').ReferenceStatus) => void): () => void
   }
   /** Python IntelliSense: the editor's link to the language server (main/pythonLanguageServer.ts) */
   /** The Code view as an IDE (shared/ide) */

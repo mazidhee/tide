@@ -27,6 +27,8 @@ import { useApp } from '../state'
 import { Icon } from './Icon'
 import { CleanedNote, originalHtml, useShowOriginal } from './CleanedNote'
 import { VideoPlayer } from './VideoPlayer'
+import { ReferencePage } from './ReferencePage'
+import { REF_LABELS } from '@shared/reference'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -45,6 +47,7 @@ export function targetTitle(t: LinkTarget): string {
   if (t.kind === 'github-file') return t.path.split('/').pop() || t.repo
   if (t.kind === 'youtube') return 'Video'
   if (t.kind === 'web') return host(t.url)
+  if (t.kind === 'reference') return REF_LABELS[t.source]
   return ''
 }
 
@@ -84,6 +87,7 @@ export function LinkPage({ target, onShow }: { target: LinkTarget; onShow?: (t: 
   if (target.kind === 'course-file' || target.kind === 'github-file') return <RepoPage key={`${target.kind}:${'course' in target ? target.course : target.repo}:${target.path}`} target={target} />
   if (target.kind === 'youtube') return <VideoPage key={target.id} id={target.id} t={target.t} />
   if (target.kind === 'web') return <WebPage key={target.url} url={target.url} onShow={onShow} />
+  if (target.kind === 'reference') return <ReferencePage key={`${target.source}:${target.path}`} target={target} />
   return null
 }
 

@@ -5,6 +5,7 @@
  * tutor builds on what was learnt, goes back to what was missed, and doesn't teach it all again.
  */
 import type { LessonRecord } from './lessonLog'
+import { rrf } from './reference'
 import { notAnAttempt, saysDontKnow } from './lessonRepair'
 import { ownWords, parseBlocks } from './session'
 
@@ -101,13 +102,21 @@ export function closeness(a: string, b: string): number {
 }
 
 /** The earlier lessons worth telling the tutor about: the same topic first, then close ones, latest first */
-export function relatedLessons(topic: string, all: LessonDigest[], now = Date.now()): LessonDigest[] {
-  return all
+export function relatedLessons(topic: string, all: LessonDigest[], now = Date.now(), similar?: Map<string, number>): LessonDigest[] {
+  const recent = all.filter((d) => now - d.when < 180 * 86_400_000)
+  const byWords = recent
     .map((d) => ({ d, close: closeness(topic, d.topic) }))
-    .filter((x) => x.close >= 0.5 && now - x.d.when < 180 * 86_400_000)
+    .filter((x) => x.close >= 0.5)
     .sort((a, b) => b.close - a.close || b.d.when - a.d.when)
-    .slice(0, 3)
     .map((x) => x.d)
+  if (!similar?.size) return byWords.slice(0, 3)
+  // By meaning too (main/embeddings): "names are labels" finds the lesson on names and values that shares no word with it
+  const byMeaning = recent
+    .filter((d) => similar.has(d.id))
+    .sort((a, b) => similar.get(b.id)! - similar.get(a.id)!)
+  return rrf([{ items: byWords }, { items: byMeaning }], (d) => d.id)
+    .slice(0, 3)
+    .map((x) => x.item)
 }
 
 const day = (ms: number, now: number) => {
@@ -116,8 +125,8 @@ const day = (ms: number, now: number) => {
 }
 
 /** The note a new lesson's tutor is given about earlier ones; empty when there are none */
-export function priorLessonsNote(topic: string, all: LessonDigest[], now = Date.now()): string {
-  const found = relatedLessons(topic, all, now)
+export function priorLessonsNote(topic: string, all: LessonDigest[], now = Date.now(), similar?: Map<string, number>): string {
+  const found = relatedLessons(topic, all, now, similar)
   if (!found.length) return ''
   const lines = found.map((d) => {
     const marks = d.right + d.partly + d.wrong

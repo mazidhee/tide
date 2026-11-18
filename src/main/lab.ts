@@ -312,5 +312,39 @@ export function loadHint(question: string, files: string[]): string {
 /** Whether a lesson is about SQL, and so works in the data lab */
 export const aboutSql = (text: string) => /\bsql\b|\bsqlite\b|\bpostgres|\bgroup by\b|\bhaving\b|\bjoins?\b|\bwindow functions?\b|\bselect\b.*\bfrom\b|\bsubquer|\bcte\b|\bquery\b|\bqueries\b/i.test(text)
 
+// ---------- The real datasets (main/datasets) ----------
+
+/**
+ * Loads the real datasets a query names (nyc_taxi_trips, online_retail, …) into that lab, once
+ * each. Reading Parquet is asynchronous, so the lab's callers await this before labQuery.
+ */
+export async function ensureDatasetTables(id: string, sql: string): Promise<string[]> {
+  const held = lab(id)
+  if (!held || !/[a-z]/i.test(sql ?? '')) return []
+  const { datasetTableNames, readDatasetTable } = await import('./datasets')
+  const { tablesNamed } = await import('@shared/datasets')
+  const have = new Set(held.engine.schema().map((t) => t.name.toLowerCase()))
+  const want = tablesNamed(sql, await datasetTableNames()).filter((n) => !have.has(n))
+  const done: string[] = []
+  for (const name of want) {
+    try {
+      const t = await readDatasetTable(name)
+      if (!t) continue
+      held.engine.loadTable(name, t.columns, t.types, t.rows)
+      held.told = false
+      done.push(t.of ? `${name} (a ${t.rows.length.toLocaleString('en-GB')}-row sample of ${t.of.toLocaleString('en-GB')})` : name)
+    } catch (e) {
+      console.warn('[lab] could not load dataset', name, (e as Error).message)
+    }
+  }
+  return done
+}
+
+/** labQuery after loading any dataset the query names */
+export async function labQueryWithData(id: string, sql: string, maxRows = VIEW_ROWS): Promise<LabResult> {
+  await ensureDatasetTables(id, sql).catch(() => [])
+  return labQuery(id, sql, maxRows)
+}
+
 /** For tests: how many labs are held */
 export const labCount = () => labs.size

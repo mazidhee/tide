@@ -474,7 +474,7 @@ export const chunksNow = (path: string): Chunk[] => opened()?.chunksNow(path) ??
 
 export const allChunkPaths = () => (opened() ? Object.keys(manifest) : [])
 
-function makeSnippet(text: string, q: string): string {
+export function makeSnippet(text: string, q: string): string {
   const flat = text.replace(/\s+/g, ' ')
   const terms = q.toLowerCase().split(/\s+/).filter((t) => t.length > 1)
   const lower = flat.toLowerCase()

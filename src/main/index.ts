@@ -114,6 +114,7 @@ import { PATTERNS, addChallenge, addProblem, addStarterSet, listProblems, record
 import { getGoals, getRecallQueue, listDrills, listInterviews, logDrill, logInterview, reviewRecall, saveGoals } from './learn'
 import type { DrillResult } from '@shared/drills'
 import type { InterviewRecord } from '@shared/interviews'
+import type { RefSource } from '@shared/reference'
 import { cardsSaved, getCards, removeCards, reviewCard, saveCards } from './study'
 import { registerEditorIpc, runNow } from './workshopWatch'
 
@@ -308,6 +309,20 @@ function registerIpc() {
   handle('vault:notes', () => allNotes())
 
   handle('search:query', (q: string, limit?: number) => searchHits(q, limit))
+  handle('search:hybrid', async (q: string, limit?: number) => (await import('./embeddings')).hybridSearchHits(q, limit))
+
+  // The offline reference and datasets (main/reference): Settings › Reference & data, the search palette, the reader
+  handle('reference:status', async () => (await import('./reference')).referenceStatus())
+  handle('reference:rebuild', async () => (await import('./reference')).rebuildReference())
+  handle('reference:lookup', async (q: string, source?: RefSource, limit?: number) => (await import('./reference')).lookupReference(q, source, limit))
+  handle('reference:page', async (source: RefSource, path: string) => (await import('./reference')).referencePage(source, path))
+  handle('reference:file', async (source: RefSource, path: string) => (await import('./reference')).referenceFile(source, path))
+  handle('reference:openFolder', async (which: 'reference' | 'datasets') => {
+    const r = await import('./reference')
+    const dir = which === 'datasets' ? r.datasetsRoot() : r.referenceRoot()
+    await (await import('fs/promises')).mkdir(dir, { recursive: true })
+    return shell.openPath(dir)
+  })
 
   handle('ai:chat', (req: ChatRequest) => {
     chat(req, (e) => send('ai:event', e))
@@ -854,7 +869,7 @@ function registerIpc() {
   handle('goals:save', (goals: Parameters<typeof saveGoals>[0]) => saveGoals(goals))
   handle('exam:generate', (scope: ChatScope, topic: string, opts: Parameters<typeof generateExam>[2]) => generateExam(scope, topic, opts))
   handle('exam:mark', (q: Parameters<typeof markPart>[0], i: number, answer: string, images: string[]) => markPart(q, i, answer, images))
-  handle('lab:query', (id: string, sql: string) => labQuery(String(id ?? ''), String(sql ?? '')))
+  handle('lab:query', (id: string, sql: string) => import('./lab').then((m) => m.labQueryWithData(String(id ?? ''), String(sql ?? ''))))
   handle('lab:schema', (id: string) => labSchema(String(id ?? '')))
   handle('lab:reset', (id: string) => labReset(String(id ?? '')))
   handle('lab:load', (id: string, path: string) => labLoadTable(String(id ?? ''), String(path ?? '')))
@@ -1185,6 +1200,13 @@ app.whenReady().then(() => {
   app.on('browser-window-focus', () => setMenu())
   createWindow()
   onBrainEvent((e) => BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send('brain:event', e)))
+  void import('./reference').then((r) => {
+    r.onReferenceProgress((st) => send('reference:progress', st))
+    // The offline reference, the datasets and search by meaning: built in the background, only what changed
+    r.startReference()
+    setTimeout(() => void import('./datasets').then((d) => d.prepareDatasets()).catch(() => {}), 30_000).unref?.()
+    void import('./embeddings').then((e) => e.startSemantic())
+  })
   onModelBusy((busy) => BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send('model:busy', busy)))
   // Where you're heading, worked out quietly once the app has settled (every few days at most)
   setTimeout(() => inferDirection().catch(() => {}), 90_000)
@@ -1242,6 +1264,7 @@ app.on('before-quit', () => {
   setQuitting()
   void import('./claudeEngine').then((c) => c.stopClaude()).catch(() => {})
   void import('./calculator').then((c) => c.stopCalculator()).catch(() => {})
+  void import('./embeddings').then((e) => e.stopService()).catch(() => {})
   void import('./tideMcp').then((m) => m.mcpHandle()?.close()).catch(() => {})
   stopStudyApi().catch(() => {})
   closeAllTerminals()

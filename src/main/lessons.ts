@@ -122,5 +122,7 @@ export async function earlierLessons(topic: string, notId?: string): Promise<str
   // Questions due for recall come first: the lesson opens with one of them. Then what those lessons
   // show, and last the wider picture: what around this topic is solid, shaky, or not yet in place
   const known = await knowledgeNoteFor(topic).catch(() => '')
-  return [openingNotes(recallNote(topic), priorLessonsNote(topic, digests)), known].filter(Boolean).join('\n\n')
+  // Lessons close in meaning as well as in words, when the embedding index is there (main/embeddings)
+  const similar = await import('./embeddings').then((m) => m.similarLessons(topic)).catch(() => undefined)
+  return [openingNotes(recallNote(topic), priorLessonsNote(topic, digests, Date.now(), similar)), known].filter(Boolean).join('\n\n')
 }
