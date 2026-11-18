@@ -1929,17 +1929,19 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
 async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
   const { ctx, messages, images, job } = await buildTurn(req, emit, signal)
   const target = req.warmOnly || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, (req.engine === 'claude' ? 'auto' : req.engine) ?? 'auto', false)
+  const name = target ? (providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model) : 'Gemma'
   if (target) {
-    const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
     const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'
     ctx.cloud = { target, task: job ?? (req.instructions ? 'tutor' : 'chat'), stepId: ctx.step({ kind: 'helper', label: `${name} is ${why}`, status: 'running', depth: 0 }) }
   }
   if (req.warmOnly) return warmTurn(messages, await turnTools(ctx, 0), signal)
+  emit({ id: req.id, type: 'model', model: name })
   // The pictures ride on this turn's message only: the start of the prompt stays the same, and cached
   const last = messages[messages.length - 1]
   if (images.length && last.role === 'user') last.content = [{ type: 'text', text: String(last.content) }, ...images.map((im) => ({ type: 'image_url' as const, image_url: { url: im.dataUrl } }))]
   await loop(messages, ctx, 0, (text) => (text === RESET ? emit({ id: req.id, type: 'reset' }) : emit({ id: req.id, type: 'delta', text })))
   if (ctx.cloud && !ctx.cloud.fellBack) ctx.updateStep(ctx.cloud.stepId, { status: 'done' })
+  if (ctx.cloud?.fellBack) emit({ id: req.id, type: 'model', model: 'Gemma' })
 }
 
 /** The "Open in Tide" link for a task the tutor sets, from the tool's open argument */

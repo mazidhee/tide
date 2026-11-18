@@ -120,7 +120,34 @@ def fish():
         from mlx_audio.tts.utils import load_model
 
         _fish = load_model(FISH_REPO)
+        reuse_ref_prompt(_fish)
     return _fish
+
+
+def reuse_ref_prompt(model):
+    """Fish runs the whole reference clip through its codec on every call: about a second on a quiet
+    Mac, far longer while the GPU is busy. Replies are spoken sentence by sentence with the same
+    clip, so encode it once per clip and keep the result for as long as the model is loaded."""
+    prepare = getattr(model, "_prepare_reference_prompt", None)
+    if prepare is None:
+        return
+    done = {}
+
+    def cached(ref_audio, ref_text):
+        # The clips in _refs are kept as one mx array each, so the array itself names the clip
+        key = (id(ref_audio), ref_text)
+        if ref_audio is None or key not in done:
+            texts, tokens = prepare(ref_audio, ref_text)
+            if ref_audio is None:
+                return texts, tokens
+            import mlx.core as mx
+
+            mx.eval(tokens)
+            done[key] = (ref_audio, texts, tokens)
+        _, texts, tokens = done[key]
+        return list(texts), list(tokens)
+
+    model._prepare_reference_prompt = cached
 
 
 def speak_fish(text, ref):
