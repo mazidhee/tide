@@ -1052,3 +1052,120 @@ export const ANSWER_KINDS: { kind: QuestionKind; label: string }[] = [
   { kind: 'presentation-qa', label: 'Presentation Q&A' },
   { kind: 'market', label: 'Firm and market questions' }
 ]
+
+// ---------- What main hands the page (main/interviewTarget, preload/interview) ----------
+
+export interface TargetSummary {
+  slug: string
+  name: string
+  company: string
+  role: string
+  date?: string
+  timezone?: string
+  readiness: number | null
+}
+
+export interface GatheredItem {
+  kind: 'file' | 'repo' | 'page'
+  title: string
+  /** The path or URL it came from */
+  ref: string
+  chars: number
+}
+
+export interface GatheredContext {
+  at: number
+  items: GatheredItem[]
+  errors: string[]
+}
+
+export interface CourseModule {
+  id: string
+  title: string
+  status: 'locked' | 'open' | 'active' | 'passed'
+  solid: number
+  total: number
+  parts: { passed: number; of: number }
+  /** The next topic not yet ticked off, to start a lesson on */
+  next?: string
+}
+
+export interface CourseState {
+  track: string
+  title: string
+  /** The track's notebook (its lessons are scoped to it, so module progress counts them) */
+  notebook?: string
+  modules: CourseModule[]
+}
+
+export interface TargetCards extends CardsState {
+  path: string
+  exists: boolean
+  /** Each card's next due time; null for a new card */
+  dues: (number | null)[]
+  /** When this deck's reviews were today */
+  reviewedToday: number[]
+  addedToday: boolean
+}
+
+export interface TargetBundle {
+  files: TargetFiles
+  progress: Progress
+  cards: TargetCards
+  context: GatheredContext | null
+  course: CourseState | null
+  /** Which of the target's files exist */
+  has: Record<'stories' | 'questions' | 'scenarios' | 'presentation' | 'firm' | 'ask' | 'frameworks', boolean>
+  /** Claude can write and mark */
+  claude: boolean
+}
+
+export interface NewTarget {
+  company: string
+  role: string
+  date?: string
+  slidesDue?: string
+  sources: string[]
+  links: string[]
+}
+
+export type GenerateWhat = 'stories' | 'answers' | 'cards'
+
+export interface GenerateResult {
+  /** The file written, vault-relative */
+  path: string
+  added: number
+  backup?: string
+  by: 'claude' | 'code'
+  note?: string
+}
+
+export interface ProbeRequest {
+  /** The CV line or story being defended */
+  item: string
+  question: string
+  answer: string
+  /** Probes asked so far */
+  asked: string[]
+}
+
+export interface ClarifyRequest {
+  scenario: string
+  /** Parts revealed so far (count) */
+  shown: number
+  question: string
+}
+
+export interface InterviewApi {
+  list(): Promise<TargetSummary[]>
+  get(slug: string): Promise<TargetBundle | null>
+  create(t: NewTarget): Promise<{ slug: string; folder: string }>
+  /** Saves an attempt; the progress after it */
+  attempt(slug: string, a: Attempt): Promise<Progress>
+  mark(slug: string, input: MarkInput): Promise<MarkResult>
+  probe(slug: string, req: ProbeRequest): Promise<{ probe: string; by: 'claude' | 'code' }>
+  clarify(slug: string, req: ClarifyRequest): Promise<{ reply: string; by: 'claude' | 'code' }>
+  gather(slug: string): Promise<GatheredContext>
+  generate(slug: string, what: GenerateWhat): Promise<GenerateResult>
+  onProgress(cb: (p: { slug: string; step: string }) => void): () => void
+}

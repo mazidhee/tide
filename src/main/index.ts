@@ -68,6 +68,7 @@ import { registerIdeas } from './ideaProjects'
 import { registerPractice } from './practiceStack'
 import { registerWork } from './workProjects'
 import { registerPacks, stopPacks } from './packs'
+import { registerInterview } from './interviewTarget'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, speedStatus } from './modelServer'
@@ -246,6 +247,7 @@ function registerIpc() {
   registerPractice()
   registerWork()
   registerPacks()
+  registerInterview()
   registerBackups(handle)
   registerBugReports()
   registerWeekProgress(handle)

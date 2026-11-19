@@ -106,6 +106,11 @@ export const JOB_ROUTES = {
   // Claude the mock runs with no interviewer and is marked in code
   mockInterviewer: { label: 'Mock interviewer', role: 'teach' },
   mockMark: { label: 'Marking a mock interview', role: 'mark' },
+  // Interview targets (main/interviewTarget): Opus marks drills, Sonnet writes from the learner's own facts and plays
+  // the interviewer in a drill. Claude only: without it drills are marked in code and nothing is written
+  interviewMark: { label: 'Marking an interview drill', role: 'mark' },
+  interviewWrite: { label: 'Stories, model answers and cards for an interview', role: 'teach' },
+  interviewProbe: { label: 'Interviewer follow-ups in a drill', role: 'teach' },
   // Sharpness training (main/sharpness): Opus writes unseen problems (checked in the sandbox before use; without
   // Claude they come from the fixed bank, never Gemma), marks written answers, coaches the post-mortem and plays the
   // system in incident drills. Marking and coaching fall back to Gemma, then to code; the drill's system to its own data
