@@ -35,7 +35,7 @@ export interface FlightTutorHandle {
   send(text: string, shown?: string): void
 }
 
-export function FlightTutor({ slug, title, step, stepTitle, root, file, terminalId, onReady }: { slug: string; title: string; step: number; stepTitle: string; root: string; file: string; terminalId: string | null; onReady?(h: FlightTutorHandle): void }) {
+export function FlightTutor({ slug, title, fresh = false, step, stepTitle, root, file, terminalId, onReady }: { slug: string; title: string; fresh?: boolean; step: number; stepTitle: string; root: string; file: string; terminalId: string | null; onReady?(h: FlightTutorHandle): void }) {
   const [turns, setTurns] = useState<Turn[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(KEY(slug)) ?? '[]') as Turn[]
@@ -50,7 +50,7 @@ export function FlightTutor({ slug, title, step, stepTitle, root, file, terminal
   const [engine, setEngine] = useState<Engine>(() => (localStorage.getItem(ENGINE) as Engine) || 'auto')
   const labId = useMemo(() => `work:${slug}`, [slug])
   const topic = `Work project: ${title}`
-  const setup: SessionSetup = useMemo(() => ({ mode: 'teach', scope: { kind: 'none' }, topic, options: { codeRoot: root, strategy: 'code', workProject: { slug, title } } }), [topic, root, slug, title])
+  const setup: SessionSetup = useMemo(() => ({ mode: 'teach', scope: { kind: 'none' }, topic, options: { codeRoot: root, strategy: 'code', workProject: { slug, title, ...(fresh ? { fresh } : {}) } } }), [topic, root, slug, title, fresh])
   const live = useRef('')
   const listRef = useRef<HTMLDivElement>(null)
 

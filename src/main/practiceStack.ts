@@ -48,6 +48,11 @@ function readState(): StackState {
     return {}
   }
 }
+/** The practice collections as last seeded, without starting anything (shared/workTask drafts its Data: lines from them) */
+export function practiceCollections(): { name: string; count: number }[] {
+  return readState().seeded?.collections ?? []
+}
+
 function writeState(s: StackState) {
   mkdirSync(dir(), { recursive: true })
   writeFileSync(statePath(), JSON.stringify(s, null, 2))
