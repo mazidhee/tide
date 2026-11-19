@@ -161,8 +161,7 @@ export function makePersona(input: Pick<MockTargetInput, 'role' | 'notes' | 'rou
   const v = pick(r, voices)
   const name = `${pick(r, FIRST[v.gender])} ${pick(r, LAST)}`
   const area = pick(r, personaAreas(input))
-  const kind = input.round.kind
-  const title = kind === 'presentation' ? `${pick(r, TITLES)}, assessor` : pick(r, TITLES)
+  const title = pick(r, TITLES)
   return {
     name,
     title,
