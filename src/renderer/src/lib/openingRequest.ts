@@ -19,7 +19,8 @@ export function openingRequest(given: SessionSetup, scope: ChatScope, character:
     messages: [{ role: 'user', content: openingMessage(setup) }],
     scope,
     instructions: sessionInstructions(setup),
-    ...(setup.options?.strategy === 'walkthrough' ? { canvasPath: lessonCanvasPath(scope, setup.topic) } : {}),
+    // Every lesson has its canvas beside it: the tutor can read and draw on it from the first message
+    ...(setup.mode === 'teach' ? { canvasPath: lessonCanvasPath(scope, setup.topic) } : {}),
     session: true,
     web,
     voice: talk ? (character as ChatRequest['voice']) : undefined,

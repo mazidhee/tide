@@ -146,7 +146,8 @@ export function chooseStrategy(s: StrategySignals): StrategyChoice {
 /** Saying how you want to go on, mid-lesson: the approach changes to match */
 const SWITCH: [RegExp, Strategy][] = [
   [/\b(let'?s|can we|just) (talk|think) (it |this )?through\b|\bjust (talk|discuss)\b|\bless problems\b/i, 'dialogue'],
-  [/\b(draw|diagram|map) (it|this) out\b|\bon the canvas\b|\bshow me the flow\b|\bwalk me through\b/i, 'walkthrough'],
+  // Not "on the canvas": every lesson has one now, and asking for a drawing there is just that
+  [/\b(draw|diagram|map) (it|this) out\b|\bshow me the flow\b|\bwalk me through\b/i, 'walkthrough'],
   [/\b(give me|more) (some )?(problems|practice|exercises|questions)\b|\bquiz me\b|\btest me\b/i, 'problems'],
   [/\blet me (code|write|implement) it\b|\bi want to (code|write|implement)\b/i, 'code'],
   // Only a request to work there: an answer that says what "appears in the terminal" is not one
