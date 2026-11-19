@@ -43,6 +43,8 @@ export type View =
   | { kind: 'projects' }
   /** A guided work project (shared/workProject) */
   | { kind: 'work'; slug: string }
+  /** A live mock round for an interview target (components/interview/LiveMock); an empty round picks one */
+  | { kind: 'interview-mock'; slug: string; round: string }
   /** Writing (components/writing): the list of pieces, or one piece with its review beside it (`path` absolute, or vault-relative); `talk` opens the conversation */
   | { kind: 'writing'; path?: string; talk?: boolean; review?: boolean; nonce?: number }
   /** Comprehension (components/comprehension): the next passage and past lessons, or one lesson; `fresh` looks for a passage from the web at once (Learn's Comprehension) */
@@ -178,7 +180,7 @@ const HOME: View = { kind: 'home' }
 export const tabRoot: { current: HTMLElement | null } = { current: null }
 
 const TABS_KEY = 'tide.tabs'
-const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'workshop', 'new-topic', 'courses', 'projects', 'writing', 'comprehension', 'chat', 'lab', 'pylab', 'coach', 'learner', 'wrapup', 'weekly', 'northstar', 'drill', 'maths', 'workout', 'sharp', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
+const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'interview-mock', 'workshop', 'new-topic', 'courses', 'projects', 'writing', 'comprehension', 'chat', 'lab', 'pylab', 'coach', 'learner', 'wrapup', 'weekly', 'northstar', 'drill', 'maths', 'workout', 'sharp', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
 
 /** The tabs kept last time (the main window only), or one on Home */
 function loadTabs(): T.Tabs<View> {
