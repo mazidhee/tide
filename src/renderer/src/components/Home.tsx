@@ -25,6 +25,7 @@ import { useTideDesign } from '../lib/design'
 import { HomeTide } from './tide/HomeTide'
 import { startPrepared, useReadyLesson } from '../lib/prep'
 import { ReadyCard } from './ReadyCard'
+import { InterviewHomeCard } from './interview/InterviewPrep'
 import { greetingLine, greetingName } from '@shared/profile'
 import { useProfile } from '../lib/profile'
 
@@ -350,6 +351,8 @@ export function Home(_: { dueCount: number; cardCount: number }) {
                 </div>
               </section>
             )}
+
+            <InterviewHomeCard />
 
             <WorkoutHomeCard variant="classic" />
 
