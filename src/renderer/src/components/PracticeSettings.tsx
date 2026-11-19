@@ -14,7 +14,7 @@ export function PlaceTag({ place }: { place: 'practice' | 'production' }) {
 export function PracticeSettings() {
   const app = useApp()
   const [s, setS] = useState<PracticeStatus | null>(null)
-  const [doing, setDoing] = useState<'' | 'start' | 'stop' | 'reset'>('')
+  const [doing, setDoing] = useState<'' | 'start' | 'stop' | 'reset' | 'layout'>('')
   const [asking, setAsking] = useState(false)
 
   const load = useCallback(() => {
@@ -31,7 +31,7 @@ export function PracticeSettings() {
     return () => clearInterval(t)
   }, [doing, s?.metabase, s?.busy, load])
 
-  const go = async (what: 'start' | 'stop' | 'reset') => {
+  const go = async (what: 'start' | 'stop' | 'reset' | 'layout') => {
     setDoing(what)
     setAsking(false)
     try {
@@ -47,7 +47,7 @@ export function PracticeSettings() {
 
   const dockerOk = s?.docker === 'ok'
   const ready = !!s?.running && s.metabase === 'ready' && s.setUp
-  const line = s ? (doing && !s.busy ? { start: 'Starting…', stop: 'Stopping…', reset: 'Making the data again…' }[doing] : statusLine(s)) : 'Looking…'
+  const line = s ? (doing && !s.busy ? { start: 'Starting…', stop: 'Stopping…', reset: 'Making the data again…', layout: 'Building your layout…' }[doing] : statusLine(s)) : 'Looking…'
 
   return (
     <>
@@ -113,6 +113,26 @@ export function PracticeSettings() {
             </button>
           )}
         </Row>
+        {s?.layout?.path && (
+          <Row
+            label="Your layout"
+            hint={
+              s.layout.problems.length ? (
+                <span className="set-error">{s.layout.problems.slice(0, 3).join(' ')}</span>
+              ) : (
+                <>
+                  <code className="path">{s.layout.path}</code> · {s.layout.questions} questions, {s.layout.dashboards} dashboards
+                  {s.layout.built ? ` · rebuilt ${new Date(s.layout.built.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
+                  {s.layout.built?.missing.length ? <span className="set-error"> · not in the data: {s.layout.built.missing.slice(0, 4).join(', ')}</span> : null}
+                </>
+              )
+            }
+          >
+            <button className="btn small" onClick={() => void go('layout')} disabled={!!doing || !ready || !!s.layout.problems.length}>
+              {doing === 'layout' ? 'Rebuilding…' : 'Rebuild layout'}
+            </button>
+          </Row>
+        )}
         {asking && <div className="set-pad pr-confirm">Reset makes the data again from your spec and replaces every practice collection. Questions you saved in the practice Metabase are kept.</div>}
       </Group>
     </>

@@ -76,6 +76,8 @@ export interface PracticeStatus {
   setUp: boolean
   seeded: { at: number; collections: { name: string; count: number }[]; spec: string } | null
   spec: { path: string | null; problems: string[]; name?: string; collections: number; documents: number }
+  /** The learner's Metabase layout (Practice/layout.json), when there is one, and the last rebuild */
+  layout?: { path: string | null; problems: string[]; questions: number; dashboards: number; built: { at: number; questions: number; dashboards: number; made: number; missing: string[] } | null }
   url: string
   ports: typeof PRACTICE_PORTS
   /** What's happening now (starting, loading data…) */
@@ -88,6 +90,8 @@ export interface PracticeApi {
   start(): Promise<PracticeStatus>
   stop(): Promise<PracticeStatus>
   reset(): Promise<PracticeStatus>
+  /** Recreates the layout in the practice Metabase, updating in place */
+  layout(): Promise<PracticeStatus>
   open(): Promise<void>
   /** The practice Metabase's own login (local only), to sign in and look around yourself */
   login(): Promise<{ email: string; password: string } | null>
@@ -102,4 +106,17 @@ export function statusLine(s: PracticeStatus): string {
   if (s.metabase === 'starting') return 'Starting Metabase (this takes a minute or two)…'
   if (s.metabase === 'ready' && s.setUp) return 'Running.'
   return 'Running, Metabase not set up yet.'
+}
+
+/**
+ * The shell script that loads the generated files (copied to /tmp/seed in the Mongo container), one
+ * mongoimport per collection, stopping at the first that fails and saying which. Names are plain
+ * (letters, digits, _ . -), as the spec requires; anything else is refused rather than quoted.
+ */
+export function loadScript(collections: { name: string; drop: boolean }[]): string {
+  const lines = collections.map(({ name, drop }) => {
+    if (!/^[\w.-]+$/.test(name)) throw new Error(`Not a plain collection name: ${JSON.stringify(name)}`)
+    return `mongoimport --quiet --db ${PRACTICE_DB} --collection '${name}'${drop ? ' --drop' : ''} --jsonArray --file '/tmp/seed/${name}.json' || { echo "Loading ${name} failed" >&2; exit 1; }`
+  })
+  return lines.join('\n')
 }

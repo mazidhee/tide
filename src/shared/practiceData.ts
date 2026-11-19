@@ -59,6 +59,8 @@ export interface CollectionSpec {
   rows?: Record<string, unknown>[]
   /** A share of documents with some fields set to fixed values (test data, internal accounts…) */
   overrides?: { rate: number; set: Record<string, unknown>; label?: string }[]
+  /** Made first with these createCollection options (a time series, a capped collection), then loaded */
+  create?: Record<string, unknown>
 }
 
 type Base = {
@@ -91,7 +93,7 @@ export type FieldSpec = Base &
     | { gen: 'expr'; op: 'sum' | 'diff' | 'max' | 'min'; fields: string[] }
   )
 
-export const LIMITS = { collections: 60, docs: 400_000, perCollection: 200_000, fields: 120 } as const
+export const LIMITS = { collections: 400, docs: 400_000, perCollection: 200_000, fields: 200 } as const
 
 const GENS = new Set(['objectId', 'time', 'const', 'copy', 'enum', 'bool', 'int', 'number', 'date', 'ref', 'lookup', 'pattern', 'pick', 'switch', 'object', 'array', 'expr'])
 
@@ -128,6 +130,9 @@ export function specProblems(raw: unknown): string[] {
       }
       for (const [k, f] of Object.entries(c.fields)) check(k, f, `${c.name}.${k}`)
       if (c.time?.afterRef && !c.fields[c.time.afterRef]) out.push(`${c.name}: time.afterRef names ${c.time.afterRef}, which isn't one of its fields.`)
+      if (c.create !== undefined && (!c.create || typeof c.create !== 'object' || Array.isArray(c.create))) out.push(`${c.name}: create must be an object of createCollection options.`)
+      const ts = (c.create as { timeseries?: { timeField?: string } } | undefined)?.timeseries
+      if (ts && c.count > 0 && ts.timeField !== c.time?.field) out.push(`${c.name}: a time series needs time.field to be its timeField (${ts.timeField}).`)
     }
     seen.add(c.name)
   }
