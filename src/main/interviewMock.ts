@@ -67,18 +67,28 @@ export function sections(md: string): Section[] {
   return out
 }
 
-const bullets = (body: string) =>
+/** Markdown emphasis and links reduced to their words */
+const plain = (s: string) =>
+  s
+    .replace(/\*\*|__/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .trim()
+
+/** Bulleted (and, with `numbered`, numbered) list items, top level and nested */
+const bullets = (body: string, numbered = false) =>
   body
     .split('\n')
-    .map((l) => l.match(/^\s*[-*+]\s+(.*)$/)?.[1]?.trim())
+    .map((l) => (l.match(/^\s*[-*+]\s+(.*)$/) ?? (numbered ? l.match(/^\s*\d+[.)]\s+(.*)$/) : null))?.[1]?.trim())
     .filter((x): x is string => !!x)
+    .map(plain)
 
 /** `- Field: value` lines of a section */
 function fields(body: string): Record<string, string> {
   const out: Record<string, string> = {}
   let last = ''
   for (const line of body.split('\n')) {
-    const m = line.match(/^\s*[-*]\s+([A-Za-z][A-Za-z -]{1,20}):\s*(.*)$/)
+    // Fields are top-level bullets; indented ones (an outline's own points) continue the field above
+    const m = line.match(/^[-*]\s+([A-Za-z][A-Za-z -]{1,20}):\s*(.*)$/)
     if (m) out[(last = m[1].trim().toLowerCase())] = m[2].trim()
     else if (last && /^\s{2,}\S/.test(line)) out[last] += '\n' + line.trim()
   }
@@ -129,6 +139,45 @@ async function cvText(sources: string[]): Promise<string | undefined> {
   return undefined
 }
 
+/**
+ * Front matter, read leniently: YAML when it parses, else line by line (`key: value`, `- item`
+ * lists, and lists of `- key: value` maps), so an unquoted colon in a round's notes doesn't hide
+ * the whole target
+ */
+export function frontMatter(text: string): { data: Record<string, unknown>; content: string } {
+  try {
+    // Options turn off gray-matter's cache, which keeps a failed parse's empty data for the next read
+    const fm = matter(text, {})
+    return { data: fm.data as Record<string, unknown>, content: fm.content }
+  } catch {
+    const m = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
+    if (!m) return { data: {}, content: text }
+    const data: Record<string, unknown> = {}
+    let key = ''
+    let item: Record<string, string> | null = null
+    const unquote = (v: string) => v.trim().replace(/^(['"])([\s\S]*)\1$/, '$2')
+    for (const line of m[1].split('\n')) {
+      const top = line.match(/^([A-Za-z][\w-]*):\s*(.*)$/)
+      if (top) {
+        key = top[1]
+        item = null
+        data[key] = top[2].trim() ? unquote(top[2]) : []
+        continue
+      }
+      const li = line.match(/^\s*-\s+(.*)$/)
+      if (li && Array.isArray(data[key])) {
+        const kv = li[1].match(/^([A-Za-z][\w-]*):\s*(.*)$/)
+        if (kv) (data[key] as unknown[]).push((item = { [kv[1]]: unquote(kv[2]) }))
+        else ((data[key] as unknown[]).push(unquote(li[1])), (item = null))
+        continue
+      }
+      const sub = line.match(/^\s+([A-Za-z][\w-]*):\s*(.*)$/)
+      if (sub && item) item[sub[1]] = unquote(sub[2])
+    }
+    return { data, content: m[2] }
+  }
+}
+
 interface RawTarget {
   slug: string
   dir: string
@@ -148,8 +197,8 @@ async function targetDirs(): Promise<RawTarget[]> {
     const dir = join(root, name)
     const file = join(dir, 'target.md')
     if (!existsSync(file)) continue
-    const fm = matter(await fs.readFile(file, 'utf8'))
-    const d = fm.data as Record<string, unknown>
+    const fm = frontMatter(await fs.readFile(file, 'utf8'))
+    const d = fm.data
     const rounds = (Array.isArray(d.rounds) ? d.rounds : []).map((r: Record<string, unknown>, i: number) => ({
       id: String(r.id ?? `round-${i + 1}`),
       name: String(r.name ?? r.id ?? `Round ${i + 1}`),
@@ -199,9 +248,11 @@ export async function loadInput(slug: string, roundId: string): Promise<MockTarg
   for (const s of sections(qMd).filter((s) => s.level === 2)) {
     const { id, title } = idTitle(s.title)
     const fl = fields(s.body.split(/^###\s/m)[0])
+    // A heading that only groups questions ("## Behavioural") has no fields
+    if (!fl.kind && !fl.round && !fl.route && !/\?$/.test(title)) continue
     questions.push({
       id,
-      text: title,
+      text: plain(title),
       kind: (fl.kind ?? 'behavioural').toLowerCase(),
       round: fl.round,
       route: fl.route,
@@ -237,15 +288,20 @@ export async function loadInput(slug: string, roundId: string): Promise<MockTarg
     const ps = sections(pMd)
     const topic =
       (matter(pMd).data as { topic?: string }).topic ??
+      ps.find((s) => s.level === 1)?.title.replace(/^presentation\s*[:\-–—]\s*/i, '') ??
       ps
         .find((s) => /topic/i.test(s.title))
         ?.body.trim()
         .split('\n')[0] ??
       round.notes?.split('.')[0] ??
       ''
-    const checklist = ps.filter((s) => /checklist|requirement|brief/i.test(s.title)).flatMap((s) => bullets(s.body).map((b) => b.replace(/^\[[ x]\]\s*/i, '')))
+    const checklist = ps
+      .filter((s) => /checklist|requirement|brief/i.test(s.title))
+      .flatMap((s) => bullets(s.body).map((b) => b.replace(/^\[[ x]\]\s*/i, '')))
+      .filter((b) => b.length < 200)
     const assessorQuestions: { q: string; point: string }[] = []
-    const aq = ps.findIndex((s) => /assessor/i.test(s.title))
+    const titled = ps.findIndex((s) => /^assessor questions/i.test(s.title))
+    const aq = titled >= 0 ? titled : ps.findIndex((s) => /^assessor/i.test(s.title))
     if (aq >= 0) {
       for (const b of bullets(ps[aq].body)) {
         const [q, point] = b.split(/\s+[—–-]\s+|\s*→\s*/)
@@ -253,15 +309,15 @@ export async function loadInput(slug: string, roundId: string): Promise<MockTarg
       }
       for (let j = aq + 1; j < ps.length && ps[j].level > ps[aq].level; j++)
         assessorQuestions.push({
-          q: idTitle(ps[j].title).title,
-          point: ps[j].body.trim().slice(0, 400)
+          q: plain(idTitle(ps[j].title).title),
+          point: plain(ps[j].body.trim().replace(/^strong answer:\s*/i, '')).slice(0, 400)
         })
     }
     presentation = { topic, checklist, assessorQuestions }
   }
 
-  const firmFacts = bullets(firmMd)
-  const askThem = bullets(askMd).filter((b) => b.includes('?'))
+  const firmFacts = bullets(firmMd, true).filter((b) => b.length > 20)
+  const askThem = bullets(askMd, true).filter((b) => b.includes('?'))
   return {
     slug,
     company: t.company,

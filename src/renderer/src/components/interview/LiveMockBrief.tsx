@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { roundTests, type MockLoaded } from '@shared/interviewMock'
 import { PillSegment } from '../PromptBox'
 import { Icon } from '../Icon'
@@ -24,6 +24,11 @@ export function LiveMockBrief({ loaded, onStart }: { loaded: MockLoaded; onStart
   const [slideError, setSlideError] = useState<string | null>(null)
   const presentation = input.round.kind === 'presentation'
   const heard = level > 0.06
+
+  // Load the voice and dictation models now, while the learner reads the brief, so the call's first line and first answer don't wait for them
+  useEffect(() => {
+    if (loaded.voice) void window.tide.voice.warm(true).catch(() => {})
+  }, [loaded.voice])
 
   const loadSlides = async () => {
     setSlideError(null)

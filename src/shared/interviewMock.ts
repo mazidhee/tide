@@ -320,7 +320,18 @@ export function planRound(input: MockTargetInput, seed: number): Plan {
     )
   ]
   if (kind === 'technical') {
-    const behavioural = [...cvFirst(pool.filter((q) => q.kind !== 'technical' && !q.id.startsWith('g-'))), ...cvFirst(pool.filter((q) => q.id.startsWith('g-')))].slice(0, totalMs >= 40 * 60_000 ? 4 : 3)
+    // The technical round opens with behavioural questions (rules, priorities), then CV ones
+    const behaviouralFirst = (qs: MockQuestion[]) => [
+      ...shuffle(
+        r,
+        qs.filter((q) => q.kind === 'behavioural')
+      ),
+      ...shuffle(
+        r,
+        qs.filter((q) => q.kind !== 'behavioural')
+      )
+    ]
+    const behavioural = [...behaviouralFirst(pool.filter((q) => q.kind !== 'technical' && !q.id.startsWith('g-'))), ...behaviouralFirst(pool.filter((q) => q.id.startsWith('g-')))].slice(0, totalMs >= 40 * 60_000 ? 4 : 3)
     for (const q of behavioural) items.push({ type: 'question', id: q.id, q, followups: 1 })
     const s = input.scenarios.length ? pick(r, input.scenarios) : null
     if (s) items.push({ type: 'scenario', id: `scenario:${s.id}`, s, probes: 2 })

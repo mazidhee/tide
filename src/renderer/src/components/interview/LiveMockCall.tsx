@@ -262,32 +262,33 @@ export function LiveMockCall({
       setCaption((c) => ({ before: c.now, now: s }))
     }
     voice.current.onIdle = () => setSpeaking(false)
-    const start = async () => {
-      if (canHear) {
-        if (loaded.voice) void window.tide.voice.warm(true).catch(() => {})
-        try {
-          const m = await openMic({
-            mode: micMode,
-            onPiece: (p: MicPiece) => {
-              if (!yourTurn.current) return
-              const text = window.tide.voice
-                .transcribe(p.wav, { topic: input.company || undefined })
-                .then((t) => t.trim())
-                .catch((e) => (setError(clean(e)), ''))
-              pieces.current.push({ text, start: p.start, end: p.end })
-              void text.then((t) => t && setLive((cur) => (cur ? `${cur} ${t}` : t)))
-            },
-            onEnd: () => void endRef.current(),
-            onSpeech: (on) => yourTurn.current && setYou(on ? 'speaking' : 'listening')
+    const start = () => {
+      // The mic opens alongside the opening line, so a permission prompt never holds the call up
+      if (canHear)
+        openMic({
+          mode: micMode,
+          onPiece: (p: MicPiece) => {
+            if (!yourTurn.current) return
+            const text = window.tide.voice
+              .transcribe(p.wav, { topic: input.company || undefined })
+              .then((t) => t.trim())
+              .catch((e) => (setError(clean(e)), ''))
+            pieces.current.push({ text, start: p.start, end: p.end })
+            void text.then((t) => t && setLive((cur) => (cur ? `${cur} ${t}` : t)))
+          },
+          onEnd: () => void endRef.current(),
+          onSpeech: (on) => yourTurn.current && setYou(on ? 'speaking' : 'listening')
+        })
+          .then((m) => {
+            if (dead) return m.stop()
+            mic.current = m
+            if (yourTurn.current) (m.setAutoEnd(cursor.current.stage !== 'presenting'), m.setActive(true))
           })
-          if (dead) return m.stop()
-          mic.current = m
-        } catch {
-          setTyping(true)
-          setError('Tide can’t use the microphone, so type your answers. Allow it in System Settings › Privacy & Security › Microphone.')
-        }
-      }
-      if (dead) return
+          .catch(() => {
+            setTyping(true)
+            if (yourTurn.current) setYou('typing')
+            setError('Tide can’t use the microphone, so type your answers. Allow it in System Settings › Privacy & Security › Microphone.')
+          })
       t0.current = performance.now()
       clock.start()
       void say({ move: 'open' })

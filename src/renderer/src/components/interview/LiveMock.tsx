@@ -73,6 +73,8 @@ export function LiveMock({ slug, round }: { slug: string; round: string }) {
     if (!loaded) return
     if (!r.lines.some((l) => l.who === 'you')) return setPhase({ at: 'brief' })
     setPhase({ at: 'marking', persona, result: r })
+    // For the test copy's checks: how quickly the interviewer answered
+    if (window.tide.app.testCopy) (window as unknown as { __liveMock: unknown }).__liveMock = { waits: r.waits, firstText: r.firstText, lines: r.lines.length }
     try {
       const { attempt, delta } = await window.tide.interviewMock.mark({
         slug,
