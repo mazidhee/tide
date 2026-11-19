@@ -23,6 +23,10 @@ export interface TtsEngineInfo {
   voices: TtsVoice[]
   /** Several voices at once, so quoted dialogue can have its own */
   multiVoice: boolean
+  /** Made at one speed: the player sets the tempo, pitch kept */
+  speedInPlayer?: boolean
+  /** Slower to make than to hear: made further ahead */
+  slow?: boolean
 }
 
 /** Kokoro's English voices (the voice files are small and fetched on first use; the model is the one already set up) */
@@ -40,6 +44,9 @@ export const KOKORO_VOICES: TtsVoice[] = [
   { id: 'am_michael', label: 'Michael', detail: 'American' },
   { id: 'am_adam', label: 'Adam', detail: 'American' }
 ]
+
+/** The professor, the lecture voice (Fish S2 Pro): one voice */
+export const PROFESSOR_VOICES: TtsVoice[] = [{ id: 'professor', label: 'The professor', detail: 'The lecture voice: warm, unhurried, made on this Mac' }]
 
 /** Two voices for dialogue that differ from the narrator (and from each other) */
 export function dialogueVoices(narrator: string, voices: TtsVoice[] = KOKORO_VOICES): string[] {

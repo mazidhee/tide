@@ -34,7 +34,7 @@ export interface Mark {
 export type BookKind = 'epub' | 'pdf' | 'text'
 
 export interface BookVoice {
-  /** The TTS engine (shared/speech): 'kokoro' now; others plug in */
+  /** The TTS engine (shared/speech): 'kokoro' or 'professor'; others plug in */
   engine: string
   narrator: string
   /** Quoted dialogue in other voices (when the engine has several) */

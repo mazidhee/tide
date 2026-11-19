@@ -1,15 +1,18 @@
 import { app } from 'electron'
 import { existsSync, promises as fs } from 'fs'
 import { join } from 'path'
-import { KOKORO_VOICES, speechKey, type TtsEngineInfo, type TtsVoice } from '@shared/speech'
-import { speak, voiceStatus } from './voice'
+import { KOKORO_VOICES, PROFESSOR_VOICES, speechKey, type TtsEngineInfo, type TtsVoice } from '@shared/speech'
+import { fishText } from '@shared/narration'
+import { pieceTimeout, spokenWords } from '@shared/lectureScript'
+import { lectureStatus, speak, speakFish, voiceStatus } from './voice'
 
 /**
  * Speech engines for reading aloud (shared/speech). An engine says what it is and makes WAV audio
  * from text; Tide keeps what it made in a cache, so a chapter is made once, and makes the next
- * chapter ahead of time while nothing else is being spoken. Kokoro (main/voice) is the engine now.
- * A better voice is added by registering another engine here: nothing else changes. No engine
- * downloads a model without being set up first in Settings.
+ * chapter ahead of time while nothing else is being spoken. Kokoro (main/voice) and the professor
+ * (Fish S2 Pro, the lecture voice) are the engines now. A better voice is added by registering
+ * another engine here: nothing else changes. No engine downloads a model without being set up
+ * first in Settings.
  */
 
 export interface TtsEngine {
@@ -20,6 +23,10 @@ export interface TtsEngine {
   voices(): TtsVoice[]
   status(): Promise<{ ready: boolean; detail: string }>
   synth(text: string, voice: string, speed: number): Promise<Uint8Array>
+  /** Made at one speed only: the player changes the tempo (pitch kept) */
+  speedInPlayer?: boolean
+  /** Slower to make than to hear: the player makes further ahead */
+  slow?: boolean
 }
 
 export const kokoro: TtsEngine = {
@@ -32,7 +39,24 @@ export const kokoro: TtsEngine = {
   synth: (text, voice, speed) => speak(text, voice, speed)
 }
 
-const engines = new Map<string, TtsEngine>([[kokoro.id, kokoro]])
+/** The professor: Fish S2 Pro cloning the lecture voice's reference clip (main/voice) */
+export const professor: TtsEngine = {
+  id: 'professor',
+  label: 'The professor (Fish S2 Pro, on this Mac)',
+  local: true,
+  multiVoice: false,
+  speedInPlayer: true,
+  slow: true,
+  voices: () => PROFESSOR_VOICES,
+  status: lectureStatus,
+  synth: (text) => speakFish(fishText(text), 'professor', pieceTimeout(spokenWords(text)))
+}
+
+// The professor first: one voice, above Kokoro's list
+const engines = new Map<string, TtsEngine>([
+  [professor.id, professor],
+  [kokoro.id, kokoro]
+])
 
 /** A new engine (a better voice), ready to be chosen per book */
 export function registerEngine(e: TtsEngine) {
@@ -45,7 +69,7 @@ export async function listEngines(): Promise<TtsEngineInfo[]> {
   return Promise.all(
     [...engines.values()].map(async (e) => {
       const s = await e.status().catch(() => ({ ready: false, detail: 'Unavailable' }))
-      return { id: e.id, label: e.label, local: e.local, ready: s.ready, detail: s.detail, voices: e.voices(), multiVoice: e.multiVoice }
+      return { id: e.id, label: e.label, local: e.local, ready: s.ready, detail: s.detail, voices: e.voices(), multiVoice: e.multiVoice, speedInPlayer: !!e.speedInPlayer, slow: !!e.slow }
     })
   )
 }
@@ -59,8 +83,11 @@ export const setCacheDir = (dir: string) => (cacheRoot = dir)
 const fileFor = (key: string) => join(cacheDir(), key.slice(0, 2), `${key}.wav`)
 const MAX_CACHE = 600 * 1024 * 1024
 
+/** An engine made at one speed keeps one copy, whatever speed it's played at */
+const madeSpeed = (e: TtsEngine, speed: number) => (e.speedInPlayer ? 1 : speed)
+
 export async function cached(engine: string, voice: string, speed: number, text: string): Promise<Uint8Array | null> {
-  const f = fileFor(speechKey(engine, voice, speed, text))
+  const f = fileFor(speechKey(engine, voice, madeSpeed(engineOf(engine), speed), text))
   return existsSync(f) ? new Uint8Array(await fs.readFile(f)) : null
 }
 
@@ -74,7 +101,7 @@ export async function synth(engineId: string, text: string, voice: string, speed
   const hit = await cached(e.id, voice, speed, text)
   if (hit) return hit
   const wav = await e.synth(text, voice, speed)
-  const f = fileFor(speechKey(e.id, voice, speed, text))
+  const f = fileFor(speechKey(e.id, voice, madeSpeed(e, speed), text))
   await fs.mkdir(join(f, '..'), { recursive: true })
   await fs.writeFile(f, wav)
   void trim().catch(() => {})
@@ -160,7 +187,8 @@ async function drain() {
 /** How many of these pieces are already made */
 export async function cachedCount(engine: string, speed: number, pieces: { text: string; voice: string }[]): Promise<number> {
   let n = 0
-  for (const p of pieces) if (existsSync(fileFor(speechKey(engineOf(engine).id, p.voice, speed, p.text)))) n++
+  const e = engineOf(engine)
+  for (const p of pieces) if (existsSync(fileFor(speechKey(e.id, p.voice, madeSpeed(e, speed), p.text)))) n++
   return n
 }
 
