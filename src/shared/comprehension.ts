@@ -10,17 +10,19 @@
 import { locAnchor, locLabel, type PassageLoc } from './passage'
 import { findUnit, type ReaderChapter } from './readingRoom'
 import { locateQuote } from './writing'
+import type { WebCredit } from './compWeb'
 
 // ---------- The lesson ----------
 
-/** The steps in order. Later increments add theirs (the argument map, going beyond the text) between summary and review */
-export const STEPS = ['read', 'summary', 'review', 'words', 'done'] as const
+/** The steps in order. Later increments add theirs (going beyond the text) after the map */
+export const STEPS = ['read', 'summary', 'review', 'map', 'words', 'done'] as const
 export type CompStep = (typeof STEPS)[number]
 
 export const STEP_LABEL: Record<CompStep, string> = {
   read: 'Read',
   summary: 'Say what it says',
   review: 'Look again',
+  map: 'Map the argument',
   words: 'Words',
   done: 'Done'
 }
@@ -36,9 +38,9 @@ export interface HardMark {
 }
 
 export interface PassageSource {
-  /** The next unread section of the book being read, words chosen in the reader, or a check in the reader's flow (increment 2) */
-  kind: 'book' | 'selection' | 'book-check'
-  /** The book's vault path */
+  /** The next unread section of the book being read, words chosen in the reader, a check in the reader's flow (increment 2), or a fresh text from the web (increment 3) */
+  kind: 'book' | 'selection' | 'book-check' | 'web'
+  /** The book's vault path ('' for a web passage) */
   path: string
   work: string
   author?: string
@@ -46,6 +48,10 @@ export interface PassageSource {
   locs: PassageLoc[]
   /** Where it is, for people: "Book II ¶3–5" */
   label: string
+  /** A story rather than an argument (the book's own flag): the map asks what happens, not what it claims */
+  narrative?: boolean
+  /** A web passage's source, licence and the page it was checked against: shown with it always */
+  web?: WebCredit
 }
 
 export type Verdict = 'caught' | 'missed' | 'wrong'
@@ -89,6 +95,10 @@ export interface CompLesson {
   summary?: string
   grade?: SummaryGrade
   cards?: { made: number; path: string }
+  /** The learner's map of how the passage argues, and how it compares (increment 4) */
+  map?: MapRecord
+  /** One quiet line said with the passage: why it isn't the kind asked for ("Couldn’t find…; here is your book") */
+  note?: string
   finishedAt?: number
 }
 
@@ -560,4 +570,321 @@ export function sectionCue(firstText: string, chapter: string | undefined, toEnd
   const all = firstText.trim().replace(/^[IVXLC\d]+\.\s+/, '').split(/\s+/)
   const head = all.slice(0, 5).join(' ').replace(/[,;:.!?]+$/, '')
   return `From “${head}${all.length > 5 ? '…' : ''}”${toEnd && chapter ? ` to the end of ${chapter}` : ''}`
+}
+
+// ---------- Map how it argues (increment 4) ----------
+
+/**
+ * After the summary, the learner maps how the passage works: for an argument its claim, its
+ * reasons (each with what backs it), what it takes for granted and where it turns; for a story
+ * what happens, who, the turn and what it means. Opus writes its own map of the passage, each
+ * part tied to the passage's exact words, and compares the two part by part. Without Claude the
+ * learner checks their map against a short rubric.
+ */
+export type MapKind = 'argued' | 'narrative'
+
+export interface MapField {
+  id: string
+  label: string
+  /** The question the field answers, as its placeholder */
+  ask: string
+  /** The reasons: a list, each with its backing */
+  list?: boolean
+}
+
+export const MAP_FIELDS: Record<MapKind, MapField[]> = {
+  argued: [
+    {
+      id: 'claim',
+      label: 'Claim',
+      ask: 'What does it want you to accept? One sentence.'
+    },
+    { id: 'reasons', label: 'Because', ask: 'A reason it gives', list: true },
+    {
+      id: 'assumes',
+      label: 'Takes for granted',
+      ask: 'What must be true for the reasons to work, though it isn’t said?'
+    },
+    {
+      id: 'turn',
+      label: 'Turns',
+      ask: 'Where does it meet an objection, or say “but”?'
+    }
+  ],
+  narrative: [
+    {
+      id: 'happens',
+      label: 'What happens',
+      ask: 'What happens, in a sentence or two?'
+    },
+    { id: 'who', label: 'Who', ask: 'Who is in it, and what do they want?' },
+    { id: 'turn', label: 'Turns', ask: 'Where does it change?' },
+    {
+      id: 'means',
+      label: 'What it shows',
+      ask: 'What does it mean, or show, beyond the events?'
+    }
+  ]
+}
+
+/** The field that says what the passage is about: the claim, or what happens */
+export const mainField = (kind: MapKind) => MAP_FIELDS[kind][0].id
+
+export interface MapReason {
+  reason: string
+  /** What in the passage backs it */
+  backing: string
+}
+
+export interface ArgMap {
+  kind: MapKind
+  /** By field id (every field but the reasons) */
+  fields: Record<string, string>
+  reasons: MapReason[]
+}
+
+export type MapVerdict = 'matches' | 'partly' | 'missing' | 'off'
+
+export const MAP_VERDICT: Record<MapVerdict, string> = {
+  matches: 'Matches',
+  partly: 'Partly',
+  missing: 'Missing',
+  off: 'Not what it says'
+}
+
+/** The passage's exact words a part of the map is tied to */
+export interface MapAnchor {
+  quote: string
+  start: number
+  end: number
+}
+
+export interface MapCompare {
+  field: string
+  verdict: MapVerdict
+  /** What the learner's part gets, or what it needs */
+  note: string
+  /** The passage's words for this part; none when the quote wasn't found (shown without a highlight) */
+  anchor?: MapAnchor
+}
+
+export interface RefMap {
+  fields: Record<string, { text: string; anchor?: MapAnchor }>
+  reasons: (MapReason & { anchor?: MapAnchor })[]
+}
+
+export interface MapRecord {
+  mine: ArgMap
+  by?: 'claude' | 'self'
+  /** Claude's map of the passage, each part on its words */
+  reference?: RefMap
+  compare?: MapCompare[]
+  overall?: string
+  /** 0 to 1 */
+  score?: number
+  /** The self-check's ticks, by rubric line */
+  ticks?: Record<string, boolean>
+  at?: number
+}
+
+export const emptyMap = (kind: MapKind): ArgMap => ({
+  kind,
+  fields: {},
+  reasons: kind === 'argued' ? [{ reason: '', backing: '' }] : []
+})
+
+/** The kind a lesson's map starts as: a story for a book that tells one, else an argument */
+export const mapKindFor = (l: Pick<CompLesson, 'source'>): MapKind => (l.source.narrative ? 'narrative' : 'argued')
+
+/** A map is ready to compare once its main part and one more are written */
+export function mapReady(m: ArgMap): boolean {
+  if (!m.fields[mainField(m.kind)]?.trim()) return false
+  const others = MAP_FIELDS[m.kind].slice(1).filter((f) => (f.list ? m.reasons.some((r) => r.reason.trim()) : !!m.fields[f.id]?.trim()))
+  return others.length > 0
+}
+
+/** The map as the learner left it: fields of its kind only, reasons with something in them, all trimmed and capped */
+export function cleanMap(raw: unknown): ArgMap {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<ArgMap>
+  const kind: MapKind = r.kind === 'narrative' ? 'narrative' : 'argued'
+  const fields: Record<string, string> = {}
+  for (const f of MAP_FIELDS[kind]) if (!f.list && typeof r.fields?.[f.id] === 'string' && r.fields[f.id].trim()) fields[f.id] = r.fields[f.id].trim().slice(0, 800)
+  const reasons =
+    kind === 'argued' && Array.isArray(r.reasons)
+      ? r.reasons
+          .map((x) => ({
+            reason: str(x?.reason, 600),
+            backing: str(x?.backing, 600)
+          }))
+          .filter((x) => x.reason || x.backing)
+          .slice(0, 6)
+      : []
+  return { kind, fields, reasons }
+}
+
+const mapText = (m: ArgMap) =>
+  MAP_FIELDS[m.kind]
+    .map((f) =>
+      f.list
+        ? m.reasons.length
+          ? m.reasons.map((r, i) => `- ${f.label} ${i + 1}: ${r.reason || '(blank)'}${r.backing ? ` — backed by: ${r.backing}` : ''}`).join('\n')
+          : `- ${f.label}: (blank)`
+        : `- ${f.label}: ${m.fields[f.id]?.trim() || '(blank)'}`
+    )
+    .join('\n')
+
+export const MAP_SYSTEM = `You compare a learner's map of how a passage works with the passage itself. They are self-taught, working on reading difficult texts closely; they have read the passage and summarised it already.
+
+First make your own map of the passage, then compare theirs with it part by part.
+
+For an argued or explanatory passage the parts are:
+- "claim": the one thing it wants the reader to accept
+- "reasons": the reasons it gives, each with its "backing" (the evidence, example or step in the passage that supports it)
+- "assumes": what must be true for the reasons to work, though the passage doesn't say it
+- "turn": where it meets an objection, says "but", or changes direction ("" if it doesn't)
+
+For a story the parts are "happens" (what happens), "who" (who is in it and what they want), "turn" (where it changes) and "means" (what it shows beyond the events).
+
+Rules:
+- Every part of your map is tied to the passage's exact words: "quote" is copied character for character from the passage, 3 to 25 words. Never paraphrase in "quote". "assumes" is unstated by definition: quote the words that rely on it.
+- Compare each part of their map with yours: "matches" (same in substance, in any words), "partly" (on the way, or only some of it), "missing" (blank, or nothing that answers it) or "off" (says something the passage doesn't, or mistakes a detail for the claim). Compare their reasons as one part.
+- A "note" says in one sentence what their part gets or what it needs. Quote the passage's words for the part in "quote".
+- Judge structure and understanding, not wording. Plain, direct British English. No praise for its own sake, no analogies, no jokes.
+
+Reply with JSON only:
+{"reference":{"claim":{"text":"…","quote":"…"},"reasons":[{"reason":"…","backing":"…","quote":"…"}],"assumes":{"text":"…","quote":"…"},"turn":{"text":"…","quote":"…"}},"compare":[{"field":"claim","verdict":"matches"|"partly"|"missing"|"off","note":"…","quote":"…"}],"overall":"one or two sentences: how well the map shows how the passage works, and the one thing to look at again"}
+(For a story, the reference's keys are happens, who, turn and means, and there are no reasons.)`
+
+export function mapPrompt(o: { work: string; author?: string; label?: string; passage: string; mine: ArgMap }): string {
+  return `The passage, from ${o.work}${o.author ? ` by ${o.author}` : ''}${o.label ? ` (${o.label})` : ''}:
+"""
+${o.passage}
+"""
+
+It is ${o.mine.kind === 'narrative' ? 'a story: map what happens, who, the turn and what it shows' : 'an argument or explanation: map its claim, reasons, what it assumes and its turn'}.
+
+The learner's map:
+${mapText(o.mine)}
+`
+}
+
+/** Each verdict's weight: matches fully, partly half, off against */
+export function mapScore(compare: Pick<MapCompare, 'verdict'>[]): number {
+  if (!compare.length) return 0
+  const w = compare.reduce((n, c) => n + (c.verdict === 'matches' ? 1 : c.verdict === 'partly' ? 0.5 : c.verdict === 'off' ? -0.25 : 0), 0)
+  return Math.max(0, Math.min(1, w / compare.length))
+}
+
+const anchorIn = (passage: string, raw: unknown): MapAnchor | undefined => {
+  const quote = str(raw, 400).replace(/^[“"‘']+|[”"’']+$/g, '')
+  const at = quote ? locateQuote(passage, quote) : null
+  return at ? { quote: passage.slice(at.start, at.end), start: at.start, end: at.end } : undefined
+}
+
+/**
+ * Claude's map and comparison, checked: the reference's parts and each comparison are kept with
+ * their words in the passage when the quote is found there, and without a highlight when it isn't
+ * (the comparison still stands). One comparison per part of the map's kind; a part Claude left
+ * out is "missing" only when the learner left it blank, else dropped. Null when the reply isn't one.
+ */
+export function parseMapReply(reply: string, passage: string, mine: ArgMap, at = Date.now()): Omit<MapRecord, 'mine'> | null {
+  const j = jsonIn(reply)
+  if (!j || !Array.isArray(j.compare)) return null
+  const ids = MAP_FIELDS[mine.kind].map((f) => f.id)
+  const ref = (j.reference && typeof j.reference === 'object' ? j.reference : {}) as Record<string, unknown>
+  const reference: RefMap = { fields: {}, reasons: [] }
+  for (const f of MAP_FIELDS[mine.kind]) {
+    if (f.list) {
+      reference.reasons = (Array.isArray(ref.reasons) ? (ref.reasons as Record<string, unknown>[]) : [])
+        .map((r) => ({
+          reason: str(r?.reason, 400),
+          backing: str(r?.backing, 400),
+          anchor: anchorIn(passage, r?.quote)
+        }))
+        .filter((r) => r.reason)
+        .slice(0, 6)
+        .map(({ anchor, ...r }) => ({ ...r, ...(anchor ? { anchor } : {}) }))
+      continue
+    }
+    const v = ref[f.id] as Record<string, unknown> | string | undefined
+    const text = typeof v === 'string' ? str(v, 500) : str(v?.text, 500)
+    const anchor = typeof v === 'object' && v ? anchorIn(passage, v.quote) : undefined
+    if (text) reference.fields[f.id] = { text, ...(anchor ? { anchor } : {}) }
+  }
+  const compare: MapCompare[] = []
+  for (const raw of j.compare as Record<string, unknown>[]) {
+    const field = str(raw?.field, 40)
+    const verdict = raw?.verdict
+    if (!ids.includes(field) || compare.some((c) => c.field === field)) continue
+    if (verdict !== 'matches' && verdict !== 'partly' && verdict !== 'missing' && verdict !== 'off') continue
+    const anchor = anchorIn(passage, raw.quote)
+    compare.push({
+      field,
+      verdict,
+      note: str(raw.note, 400),
+      ...(anchor ? { anchor } : {})
+    })
+  }
+  if (!compare.some((c) => c.field === mainField(mine.kind))) return null
+  compare.sort((a, b) => ids.indexOf(a.field) - ids.indexOf(b.field))
+  return {
+    by: 'claude',
+    reference,
+    compare,
+    overall: str(j.overall, 500),
+    score: mapScore(compare),
+    at
+  }
+}
+
+/** The self-check without Claude: the map beside the passage, and the learner ticks what's true */
+export const MAP_RUBRIC: Record<MapKind, { id: string; text: string }[]> = {
+  argued: [
+    {
+      id: 'claim',
+      text: 'My claim is the point the whole passage supports, not one detail of it'
+    },
+    {
+      id: 'reasons',
+      text: 'Each reason is one the passage gives, and its backing is in the passage'
+    },
+    {
+      id: 'assumes',
+      text: 'What I say it takes for granted is not stated in the passage'
+    },
+    {
+      id: 'turn',
+      text: 'The turn is where the passage itself meets an objection or changes direction'
+    }
+  ],
+  narrative: [
+    {
+      id: 'happens',
+      text: 'What happens is the passage’s events in order, nothing added'
+    },
+    { id: 'who', text: 'I named who matters and what they want' },
+    { id: 'turn', text: 'The turn is where things really change' },
+    { id: 'means', text: 'What it shows goes beyond retelling the events' }
+  ]
+}
+
+export function mapSelfGrade(kind: MapKind, ticks: Record<string, boolean>, at = Date.now()): Omit<MapRecord, 'mine'> {
+  const rubric = MAP_RUBRIC[kind]
+  const kept = Object.fromEntries(rubric.map((r) => [r.id, !!ticks[r.id]]))
+  return {
+    by: 'self',
+    ticks: kept,
+    score: rubric.filter((r) => kept[r.id]).length / rubric.length,
+    at
+  }
+}
+
+/** "Your map: 2 of 4 parts match, 1 partly." */
+export function mapLine(m: MapRecord | undefined): string {
+  if (!m?.by) return ''
+  if (m.by === 'self') return `You ticked ${Object.values(m.ticks ?? {}).filter(Boolean).length} of ${MAP_RUBRIC[m.mine.kind].length} on your map.`
+  const c = m.compare ?? []
+  const n = (v: MapVerdict) => c.filter((x) => x.verdict === v).length
+  const extra = [n('partly') ? `${n('partly')} partly` : '', n('off') ? `${n('off')} off` : ''].filter(Boolean).join(', ')
+  return `${n('matches')} of ${c.length} parts of your map match${extra ? `, ${extra}` : ''}.`
 }

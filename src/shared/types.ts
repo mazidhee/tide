@@ -1238,6 +1238,12 @@ export interface TideApi {
     inBook(o: { path: string; locs: import('./passage').PassageLoc[]; text: string; readMs?: number; summary: string; marks?: import('./comprehension').HardMark[] }): Promise<import('./comprehension').CompLesson>
     /** The in-book checks done on a book, newest first */
     bookChecks(path: string): Promise<import('./comprehension').CompLesson[]>
+    /** What the learner is working on, to look for a fresh text near it */
+    webTopic(): Promise<{ topic?: string; notebook?: string }>
+    /** The learner's map of the argument, compared by Claude with the passage (by: 'none' when it couldn't) */
+    map(id: string, map: import('./comprehension').ArgMap): Promise<{ lesson: import('./comprehension').CompLesson; by: 'claude' | 'none' }>
+    /** The map's self-check, without Claude */
+    mapSelf(id: string, map: import('./comprehension').ArgMap, ticks: Record<string, boolean>): Promise<import('./comprehension').CompLesson>
   }
   /** Writing review (main/writing): paths are absolute (a vault-relative one is read from the notes folder) */
   writing: {

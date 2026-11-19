@@ -27,9 +27,10 @@ export const JOB_ROUTES = {
   writingTalk: { label: 'Challenging the thinking in your writing', role: 'teach' },
   // Draft check while writing: Sonnet looks at a paragraph or two for flow and clarity
   writingDraft: { label: 'Checking a paragraph as you write', role: 'teach' },
-  // Comprehension lessons (main/comprehension): Opus grades a summary against the passage. Claude only: without it
-  // the learner checks their summary against the shown passage
+  // Comprehension lessons (main/comprehension): Opus grades a summary against the passage, and compares a map of
+  // its argument with its own. Claude only: without it the learner checks their own against the shown passage
   comprehensionGrade: { label: 'Grading what you understood of a passage', role: 'mark' },
+  comprehensionMap: { label: 'Comparing your map of a passage’s argument', role: 'mark' },
   dailyMark: { label: 'Daily practice marking', role: 'mark' },
   tieBreak: { label: 'Choosing how to teach a topic', role: 'background' },
   examPaper: { label: 'Writing a practice exam', role: 'teach' },

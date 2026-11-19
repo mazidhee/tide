@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { resultLine, SELF_RUBRIC, sectionCue, sentenceCount, type CompLesson, type HardMark, type SummaryPoint } from '@shared/comprehension'
+import { emptyMap, mapKindFor, mapLine, mapReady, resultLine, SELF_RUBRIC, sectionCue, sentenceCount, type ArgMap, type CompLesson, type HardMark, type MapCompare, type SummaryPoint } from '@shared/comprehension'
 import type { PassageLoc } from '@shared/passage'
 import { useApp } from '../../state'
+import { MapCompared, MapEditor, MapRubric } from './MapEditor'
 import '../../styles/comprehension.css'
 
 /**
@@ -9,12 +10,16 @@ import '../../styles/comprehension.css'
  * flow, at a chapter's end or a natural break, when the learner has turned checks on for this
  * book. They say what the section said without seeing it again; it is graded against the
  * section's exact words, and the feedback stays here, its words lit in the book above ("Look
- * again"). Words marked hard in the section become cards. Skip hides it for good.
+ * again"). After the feedback, the learner may map how the section argued (increment 4): never
+ * required, compared with the section in place, each part's words lit in the book. Words marked
+ * hard in the section become cards. Skip hides it for good.
  */
 
 export type Lit = { start: number; end: number; verdict: SummaryPoint['verdict'] | 'all' }
 
 const VERDICT: Record<SummaryPoint['verdict'], string> = { caught: 'Caught', missed: 'Missed', wrong: 'Not what it says' }
+/** A map part's verdict as the book lights it */
+const LIGHT: Record<MapCompare['verdict'], Lit['verdict']> = { matches: 'caught', partly: 'all', missing: 'missed', off: 'wrong' }
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
 export function InBookCheck(p: {
@@ -45,6 +50,13 @@ export function InBookCheck(p: {
   const [ticks, setTicks] = useState<Record<string, boolean>>({})
   const [noClaude, setNoClaude] = useState(false)
   const box = useRef<HTMLTextAreaElement>(null)
+  // The map of how it argued: offered after the feedback, never required
+  const [mapping, setMapping] = useState(false)
+  const [map, setMap] = useState<ArgMap | null>(null)
+  const [mapBusy, setMapBusy] = useState(false)
+  const [mapSelf, setMapSelf] = useState(false)
+  const [mapTicks, setMapTicks] = useState<Record<string, boolean>>({})
+  const [litPart, setLitPart] = useState<string | null>(null)
   useEffect(() => setLesson(p.done ?? null), [p.done])
 
   const keep = (l: CompLesson) => {
@@ -100,6 +112,46 @@ export function InBookCheck(p: {
     setBusy(false)
   }
 
+  const startMap = () => {
+    if (!lesson) return
+    setMap(lesson.map?.mine ?? emptyMap(mapKindFor(lesson)))
+    setMapping(true)
+  }
+
+  const compareMap = async () => {
+    if (!lesson || !map) return
+    setMapBusy(true)
+    try {
+      const can = await window.tide.comprehension.canGrade()
+      const r = can ? await window.tide.comprehension.map(lesson.id, map) : null
+      if (r?.by === 'claude') {
+        keep(r.lesson)
+        setMapping(false)
+      } else setMapSelf(true)
+    } catch (e) {
+      app.toast(clean(e), { tone: 'error' })
+    }
+    setMapBusy(false)
+  }
+
+  const selfCheckMap = async () => {
+    if (!lesson || !map) return
+    setMapBusy(true)
+    try {
+      keep(await window.tide.comprehension.mapSelf(lesson.id, map, mapTicks))
+      setMapSelf(false)
+      setMapping(false)
+    } catch (e) {
+      app.toast(clean(e), { tone: 'error' })
+    }
+    setMapBusy(false)
+  }
+
+  const lightPart = (c: MapCompare | null) => {
+    setLitPart(c?.field ?? null)
+    if (c?.anchor) p.onLight([{ start: c.anchor.start, end: c.anchor.end, verdict: LIGHT[c.verdict] }])
+  }
+
   const g = lesson?.grade
   const points = g?.by === 'claude' ? g.points : []
   const lookAgain = () => p.onLight(points.length ? points.map((x) => ({ start: x.start, end: x.end, verdict: x.verdict })) : [{ start: 0, end: p.text.length, verdict: 'all' }])
@@ -109,7 +161,10 @@ export function InBookCheck(p: {
   if (lesson && !open && (lesson.step === 'done' || lesson.finishedAt)) {
     return (
       <aside className="ib-card folded" aria-label="Your check on this section">
-        <span className="ib-fold-line">{g ? resultLine(lesson) : 'You said what this section said.'}</span>
+        <span className="ib-fold-line">
+          {g ? resultLine(lesson) : 'You said what this section said.'}
+          {lesson.map?.by ? ` ${mapLine(lesson.map)}` : ''}
+        </span>
         <button className="ib-link" onClick={() => setOpen(true)}>
           See it again
         </button>
@@ -165,14 +220,63 @@ export function InBookCheck(p: {
                 ))}
               </ol>
             )}
-            <div className="ib-acts">
-              <button className="ib-go" onClick={lookAgain} title="Back up the page, with these words lit">
-                Look again
-              </button>
-              <button className="ib-go primary" disabled={busy} onClick={finish}>
-                {lesson.marks.length && lesson.step !== 'done' ? `Make cards of ${lesson.marks.length} hard ${lesson.marks.length === 1 ? 'word' : 'words'}` : lesson.step === 'done' ? 'Fold away' : 'Done'}
-              </button>
-            </div>
+            {mapping && map && (
+              <div className="ib-map" aria-busy={mapBusy}>
+                <p className="ib-ask">Map how it argued</p>
+                <p className="ib-cue">Scroll up to look at the section if you need to. Your own words.</p>
+                <MapEditor map={map} onChange={setMap} disabled={mapBusy || mapSelf} inBook autoFocus />
+                {mapSelf && (
+                  <>
+                    <p className="ib-cue">Claude isn’t available just now. Look again at the section, then tick what is true of your map.</p>
+                    <MapRubric kind={map.kind} ticks={mapTicks} setTicks={setMapTicks} inBook />
+                  </>
+                )}
+                {mapBusy && !mapSelf && <p className="ib-wait">Comparing your map with the section…</p>}
+                <div className="ib-acts">
+                  <button
+                    className="ib-go quiet"
+                    disabled={mapBusy}
+                    onClick={() => {
+                      setMapping(false)
+                      setMapSelf(false)
+                    }}
+                  >
+                    Not now
+                  </button>
+                  {mapSelf ? (
+                    <button className="ib-go primary" disabled={mapBusy} onClick={selfCheckMap}>
+                      Done checking
+                    </button>
+                  ) : (
+                    <button className="ib-go primary" disabled={mapBusy || !mapReady(map)} onClick={compareMap} title={mapReady(map) ? undefined : 'Write the first part and one more'}>
+                      Compare
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {!mapping && lesson.map?.by && (
+              <div className="ib-map done">
+                <p className="ib-result">{mapLine(lesson.map)}</p>
+                {lesson.map.overall && <p className="ib-overall">{lesson.map.overall}</p>}
+                {lesson.map.by === 'claude' && <MapCompared record={lesson.map} on={litPart} onLight={lightPart} inBook />}
+              </div>
+            )}
+            {!mapping && (
+              <div className="ib-acts">
+                {!lesson.map?.by && (
+                  <button className="ib-link ib-map-offer" onClick={startMap} title="Optional: its claim, reasons, what it assumes and where it turns">
+                    Map how it argued
+                  </button>
+                )}
+                <button className="ib-go" onClick={lookAgain} title="Back up the page, with these words lit">
+                  Look again
+                </button>
+                <button className="ib-go primary" disabled={busy} onClick={finish}>
+                  {lesson.marks.length && lesson.step !== 'done' ? `Make cards of ${lesson.marks.length} hard ${lesson.marks.length === 1 ? 'word' : 'words'}` : lesson.step === 'done' ? 'Fold away' : 'Done'}
+                </button>
+              </div>
+            )}
           </>
         )}
       </aside>

@@ -43,8 +43,8 @@ export type View =
   | { kind: 'work'; slug: string }
   /** Writing (components/writing): the list of pieces, or one piece with its review beside it (`path` absolute, or vault-relative); `talk` opens the conversation */
   | { kind: 'writing'; path?: string; talk?: boolean; review?: boolean; nonce?: number }
-  /** Comprehension (components/comprehension): the next passage and past lessons, or one lesson */
-  | { kind: 'comprehension'; lesson?: string }
+  /** Comprehension (components/comprehension): the next passage and past lessons, or one lesson; `fresh` looks for a passage from the web at once (Learn's Comprehension) */
+  | { kind: 'comprehension'; lesson?: string; fresh?: { site: import('@shared/compWeb').WebSite; topic: string; nonce: number } }
   | { kind: 'courses'; id?: string; lesson?: string; area?: import('@shared/courses').CourseArea }
   | { kind: 'chat'; id?: string }
   | { kind: 'lab'; terminal: 'lab' | 'local'; topic?: string; nonce?: number }

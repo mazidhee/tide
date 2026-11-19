@@ -26,7 +26,16 @@ import {
   passageSpans,
   unitToPassage,
   sectionCue,
-  sectionKey
+  sectionKey,
+  STEPS,
+  cleanMap,
+  mapReady,
+  mapScore,
+  parseMapReply,
+  mapLine,
+  mapSelfGrade,
+  emptyMap,
+  mapKindFor
 } from '../src/shared/comprehension'
 import type { ReaderChapter } from '../src/shared/readingRoom'
 import { locAnchor } from '../src/shared/passage'
@@ -235,5 +244,54 @@ describe('checks in the book', () => {
     const a = { kind: 'para' as const, chapter: 1, para: 2 }
     const b = { kind: 'para' as const, chapter: 1, para: 5 }
     expect(sectionKey([a, b])).toBe(`${locAnchor(a)}..${locAnchor(b)}`)
+  })
+})
+
+describe('the map of how a passage argues', () => {
+  const passage = 'Money is economical power. Everyone is aware that England is the greatest moneyed country in the world. But very few persons are aware how much greater the ready balance is in England than anywhere else.'
+
+  it('comes after looking again and before the hard words', () => {
+    expect(STEPS.indexOf('map')).toBe(STEPS.indexOf('review') + 1)
+    expect(STEPS.indexOf('words')).toBe(STEPS.indexOf('map') + 1)
+  })
+
+  it('starts as a story for a book that tells one, and keeps only its own kind’s parts', () => {
+    expect(mapKindFor({ source: { kind: 'book', path: 'b', work: 'w', locs: [], label: '', narrative: true } })).toBe('narrative')
+    expect(emptyMap('argued').reasons).toHaveLength(1)
+    const m = cleanMap({ kind: 'argued', fields: { claim: '  London has most ready money ', happens: 'not this kind’s', turn: '' }, reasons: [{ reason: 'deposits', backing: '' }, { reason: ' ', backing: '' }] })
+    expect(m).toEqual({ kind: 'argued', fields: { claim: 'London has most ready money' }, reasons: [{ reason: 'deposits', backing: '' }] })
+    expect(cleanMap(null).kind).toBe('argued')
+  })
+
+  it('is ready to compare once its main part and one more are written', () => {
+    expect(mapReady({ kind: 'argued', fields: { claim: 'x' }, reasons: [{ reason: '', backing: '' }] })).toBe(false)
+    expect(mapReady({ kind: 'argued', fields: { claim: 'x' }, reasons: [{ reason: 'y', backing: '' }] })).toBe(true)
+    expect(mapReady({ kind: 'argued', fields: { turn: 'y' }, reasons: [{ reason: 'y', backing: '' }] })).toBe(false)
+    expect(mapReady({ kind: 'narrative', fields: { happens: 'x', means: 'y' }, reasons: [] })).toBe(true)
+  })
+
+  it('weighs matches fully, partly half and off against', () => {
+    expect(mapScore([{ verdict: 'matches' }, { verdict: 'partly' }, { verdict: 'missing' }, { verdict: 'off' }])).toBeCloseTo((1 + 0.5 - 0.25) / 4)
+    expect(mapScore([{ verdict: 'off' }])).toBe(0)
+    expect(mapScore([])).toBe(0)
+  })
+
+  it('needs a comparison of the main part, and ties parts to the passage only where the quote is found', () => {
+    const mine = cleanMap({ kind: 'argued', fields: { claim: 'London leads' }, reasons: [{ reason: 'deposits', backing: '' }] })
+    expect(parseMapReply('{"compare":[{"field":"turn","verdict":"missing","note":""}]}', passage, mine)).toBeNull()
+    expect(parseMapReply('not json', passage, mine)).toBeNull()
+    const r = parseMapReply(JSON.stringify({ reference: { claim: { text: 'London holds the most ready money', quote: 'how much greater the ready balance is in England' }, turn: { text: 'Few know it', quote: '“But very few persons are aware”' } }, compare: [{ field: 'claim', verdict: 'partly', note: 'Close.', quote: 'Money is economical power.' }, { field: 'turn', verdict: 'missing', note: 'None.', quote: 'nowhere in it' }], overall: 'OK' }), passage, mine, 5)!
+    expect(r.reference!.fields.claim.anchor!.quote).toBe('how much greater the ready balance is in England')
+    expect(r.reference!.fields.turn.anchor!.quote).toBe('But very few persons are aware')
+    expect(r.compare![0].anchor).toEqual({ quote: 'Money is economical power.', start: 0, end: 26 })
+    expect(r.compare![1].anchor).toBeUndefined()
+    expect(r.at).toBe(5)
+    expect(mapLine({ mine, ...r })).toBe('0 of 2 parts of your map match, 1 partly.')
+  })
+
+  it('grades the self-check by the rubric of the map’s kind', () => {
+    const g = mapSelfGrade('argued', { claim: true, reasons: true, nonsense: true })
+    expect(g.score).toBe(0.5)
+    expect(mapLine({ mine: emptyMap('argued'), ...g })).toBe('You ticked 2 of 4 on your map.')
   })
 })
