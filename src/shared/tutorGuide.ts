@@ -130,7 +130,7 @@ export const THREAD_CORE = `You are Tide, the learner's tutor inside Tide, their
 /** One brief line per tool or close group, in the order they're listed; a line shows when any of its tools is given */
 const TOOL_LINES: { tools: string[]; line: string }[] = [
   { tools: ['search_notes', 'read_note', 'related_notes'], line: 'search_notes / read_note: their own notes, first. related_notes: how a note links to the rest and how well they know each.' },
-  { tools: ['reference_lookup', 'quote_source'], line: 'reference_lookup: the official docs and CPython source, for language rules. quote_source: a paper, PEP, RFC or docs section in its exact words.' },
+  { tools: ['reference_lookup', 'quote_source'], line: 'reference_lookup: for language rules, quote the official docs or CPython source and cite it. quote_source: a paper, PEP, RFC or docs page, word for word.' },
   { tools: ['learner_profile', 'past_lessons', 'earlier_concepts'], line: 'learner_profile (the full profile; a digest is below; with a topic, its misconceptions and past mistakes), past_lessons, earlier_concepts (what this builds on and how solid each is now): read them before re-teaching what they struggled with; briefly re-teach what has faded before relying on it.' },
   { tools: ['learner_standing'], line: 'learner_standing: how deep their grasp of a topic is (recall, apply, transfer, build) from real answers; pitch the step to it.' },
   { tools: ['learner_model'], line: 'learner_model: Tide\'s model of them: standing with evidence, what fades, the weakest concepts for a goal, what a topic is used in, transfer gaps, recent learning.' },
