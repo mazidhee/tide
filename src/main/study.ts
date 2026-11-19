@@ -5,6 +5,7 @@ import type { CardSchedule, ChatScope, Flashcard, ReviewGrade, StudyCard } from 
 import { appendRevlog, elapsedDays, RATING as REVLOG_RATING } from './revlog'
 import { absPath, allNotes, joinRel, readText, uniquePath, writeText } from './vault'
 import { hasCards, withCards, withoutCards } from '@shared/cards'
+import { isTargetCards } from '@shared/interviewTarget'
 import { createEmptyCard, fsrs, Rating, State, type Card as FsrsCard } from 'ts-fsrs'
 
 const SRS_FILE = joinRel('.tide', 'srs.json')
@@ -173,8 +174,9 @@ const inScope = (scope: ChatScope, path: string) =>
       : true
 
 export async function getCards(scope: ChatScope): Promise<StudyCard[]> {
+  // An interview target's cards.md is a deck of its own, tagged or not (shared/interviewTarget)
   const notes = (await allNotes()).filter(
-    (n) => inScope(scope, n.path) && (scope.kind === 'note' || n.tags.some((t) => t === FLASHCARD_TAG || t.startsWith(FLASHCARD_TAG + '/')))
+    (n) => inScope(scope, n.path) && (scope.kind === 'note' || isTargetCards(n.path) || n.tags.some((t) => t === FLASHCARD_TAG || t.startsWith(FLASHCARD_TAG + '/')))
   )
   const store = await loadStore()
   const cards: StudyCard[] = []

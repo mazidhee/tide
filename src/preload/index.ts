@@ -4,6 +4,7 @@ import { ideApi } from './ide'
 import { ideasApi } from './ideas'
 import { notebookApi } from './notebook'
 import { packsApi } from './packs'
+import { interviewApi } from './interview'
 import { practiceApi, workApi } from './practice'
 
 const invoke =
@@ -67,6 +68,7 @@ const api: TideApi = {
   practiceData: practiceApi,
   work: workApi,
   packs: packsApi,
+  interview: interviewApi,
   notebook: notebookApi,
   lsp: {
     send: (msg) => ipcRenderer.send('lsp:send', msg),

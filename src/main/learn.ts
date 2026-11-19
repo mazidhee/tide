@@ -268,8 +268,12 @@ export async function getReviewStats(): Promise<ReviewStats> {
   const cards = await getCards({ kind: 'vault' })
   const now = Date.now()
   const decks: ReviewStats['decks'] = {}
+  const deckScopes: NonNullable<ReviewStats['deckScopes']> = {}
+  const { deckOf, isTargetCards } = await import('@shared/interviewTarget')
   for (const c of cards) {
-    const deck = c.path.includes('/') ? c.path.split('/')[0] : 'Unsorted'
+    // A target's cards are their own deck, "Interview: <name>" (shared/interviewTarget)
+    const deck = deckOf(c.path)
+    if (isTargetCards(c.path)) deckScopes[deck] = { kind: 'note', path: c.path }
     const d = (decks[deck] ??= { total: 0, new: 0, due: 0, learning: 0, mature: 0 })
     d.total++
     if (!c.schedule) d.new++
@@ -279,7 +283,7 @@ export async function getReviewStats(): Promise<ReviewStats> {
       else d.learning++
     }
   }
-  return { byDay, streak, retention, totalReviews: lines.length, decks }
+  return { byDay, streak, retention, totalReviews: lines.length, decks, deckScopes }
 }
 
 // ---------- Inline tutor threads ----------

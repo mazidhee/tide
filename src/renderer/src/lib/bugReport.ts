@@ -29,7 +29,8 @@ const NAMES: Partial<Record<View['kind'], string>> = {
   help: 'Guide',
   exam: 'Exam',
   settings: 'Settings',
-  mock: 'Mock'
+  mock: 'Mock',
+  interview: 'Interview prep'
 }
 
 /**

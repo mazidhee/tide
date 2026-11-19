@@ -12,13 +12,14 @@ import { PixelScene } from './PixelScene'
 import { MockPanel } from './mock/MockPanel'
 import { SharpPanel } from './sharp/SharpPanel'
 import { AlgoPanel } from './AlgoPanel'
+import { InterviewPrepPanel } from './interview/InterviewPrep'
 
 const STATUS_LABEL: Record<PracticeStatus, string> = { todo: 'To do', solved: 'Solved', struggled: 'Struggled', redo: 'Try again' }
 const LANGUAGES = ['python', 'javascript', 'typescript', 'java', 'c++', 'go', 'rust']
 type Filter = 'all' | PracticeStatus
 
-type Tab = 'sharp' | 'daily' | 'coding' | 'problems' | 'workout' | 'quant' | 'design' | 'companies' | 'mock'
-const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' | 'subInterview' | 'gauge' | 'subAlgorithms' }[] = [
+type Tab = 'sharp' | 'daily' | 'coding' | 'problems' | 'workout' | 'quant' | 'design' | 'companies' | 'mock' | 'interview'
+const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' | 'subInterview' | 'gauge' | 'subAlgorithms' | 'subCareer' }[] = [
   { id: 'sharp', label: 'Sharpness', icon: 'gauge' },
   { id: 'daily', label: 'Daily problem', icon: 'subAlgorithms' },
   { id: 'coding', label: 'Coding', icon: 'sparkle' },
@@ -27,7 +28,8 @@ const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'ca
   { id: 'quant', label: 'Quant', icon: 'summary' },
   { id: 'design', label: 'System design', icon: 'canvas' },
   { id: 'companies', label: 'Companies', icon: 'globe' },
-  { id: 'mock', label: 'Mock', icon: 'subInterview' }
+  { id: 'mock', label: 'Mock', icon: 'subInterview' },
+  { id: 'interview', label: 'Interview prep', icon: 'subCareer' }
 ]
 
 const ago = (t: number) => {
@@ -202,6 +204,8 @@ export function PracticeView() {
             </button>
           ))}
         </nav>
+
+        {tab === 'interview' && <InterviewPrepPanel />}
 
         {tab === 'coding' && (
           <section className="pv-prompt">

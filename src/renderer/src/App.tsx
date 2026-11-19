@@ -88,6 +88,7 @@ const GraphView = lazy(() => import('./components/GraphView').then((m) => ({ def
 const DrillView = lazy(() => import('./components/DrillView').then((m) => ({ default: m.DrillView })))
 const WorkspaceWindow = lazy(() => import('./components/WorkspaceWindow').then((m) => ({ default: m.WorkspaceWindow })))
 const MockView = lazy(() => import('./components/mock/MockView').then((m) => ({ default: m.MockView })))
+const InterviewTarget = lazy(() => import('./components/interview/InterviewTarget').then((m) => ({ default: m.InterviewTarget })))
 const SharpView = lazy(() => import('./components/sharp/SharpView').then((m) => ({ default: m.SharpView })))
 
 const MEASURES = { narrow: '30', normal: '34', wide: '42' }
@@ -283,7 +284,7 @@ export default function App() {
       ? { pose: 'book' as const, label: `Reading: ${view.path.split('/').pop()!.replace(/\.(md|pdf)$/i, '')}` }
       : view.kind === 'study'
         ? { pose: 'cards' as const, label: 'Flashcards' }
-        : view.kind === 'practice' || view.kind === 'code' || view.kind === 'lab' || view.kind === 'maths' || view.kind === 'mock' || view.kind === 'workout' || view.kind === 'sharp'
+        : view.kind === 'practice' || view.kind === 'interview' || view.kind === 'code' || view.kind === 'lab' || view.kind === 'maths' || view.kind === 'mock' || view.kind === 'workout' || view.kind === 'sharp'
           ? { pose: 'laptop' as const, label: view.kind === 'lab' ? 'The Linux lab' : 'Practice' }
           : view.kind === 'design' || (view.kind === 'file' && /\.canvas$/i.test(view.path))
             ? { pose: 'board' as const, label: 'System design' }
@@ -306,7 +307,7 @@ export default function App() {
           ? { label: view.path.split('/').pop()!.replace(/\.(md|pdf|epub)$/i, ''), path: view.path, kind: 'reading' }
           : view.kind === 'study' || view.kind === 'daily'
             ? { label: view.kind === 'daily' ? 'Daily practice' : 'Flashcards', kind: 'review' }
-            : ['practice', 'code', 'lab', 'drill', 'maths', 'workout', 'sharp', 'design'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path))
+            : ['practice', 'interview', 'code', 'lab', 'drill', 'maths', 'workout', 'sharp', 'design'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path))
               ? { label: 'Practice', kind: 'practice' }
               : view.kind === 'chat'
                 ? { label: 'Chat with the tutor', kind: 'chat' }
@@ -606,6 +607,7 @@ export default function App() {
   else if (view.kind === 'ipynb') main = <JupyterView key={view.abs} refIn={{ abs: view.abs }} />
   else if (view.kind === 'help') main = <HelpView section={view.section} />
   else if (view.kind === 'sharp') main = <SharpView key={`${view.category}:${view.card ?? ''}:${view.ref ?? ''}:${view.nonce ?? ''}`} category={view.category} method={view.method} card={view.card} bank={view.bank} reference={view.ref} />
+  else if (view.kind === 'interview') main = <InterviewTarget key={`${view.slug}:${view.drill?.item ?? ''}:${view.nonce ?? ''}`} slug={view.slug} drill={view.drill} mode={view.mode} />
   else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}:${view.live ?? ''}`} mode={view.mode} review={view.review} live={view.live} />
   else if (view.kind === 'exam') main = <ExamView key={`${view.topic}:${view.nonce ?? ''}`} scope={view.scope} topic={view.topic} options={view.options} view={view} />
   else if (view.kind === 'settings') main = <SettingsView section={view.section} />
