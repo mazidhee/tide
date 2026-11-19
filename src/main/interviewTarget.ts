@@ -20,6 +20,7 @@ import {
   cardsHeading,
 
   emptyProgress,
+  lenientFrontMatter,
   markInCode,
   overallReadiness,
   parseAskThem,
@@ -115,7 +116,10 @@ async function readFiles(folder: string): Promise<{ files: TargetFiles; has: Tar
     data = m.data
     body = m.content
   } catch {
-    // Front matter that doesn't parse: the body is still the notes
+    // YAML that doesn't parse (an unquoted ": " in a note, say): read it line by line instead
+    const l = lenientFrontMatter(raw)
+    data = l.data
+    body = l.body
   }
   const text = Object.fromEntries(await Promise.all(Object.entries(FILES).map(async ([k, f]) => [k, await readOr(`${folder}/${f}`)] as const))) as Record<keyof typeof FILES, string>
   const files: TargetFiles = {
@@ -601,7 +605,11 @@ ${i.answer.slice(0, 20_000)}`
   try {
     const out = await models.once(prompt, MARK_SYSTEM, 'mark', 'interviewMark', AbortSignal.timeout(150_000))
     const m = parseMarks(out, i.drill)
-    return m ? { ...m, by: 'claude' } : code
+    if (!m) return code
+    // Time is measured, not judged: the clock's mark stands
+    for (const k of ['length', 'timing']) if (k in m.marks && k in code.marks) m.marks[k] = code.marks[k]
+    const vals = Object.values(m.marks)
+    return { ...m, score: Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100, by: 'claude' }
   } catch (e) {
     console.warn('[interview] mark', (e as Error).message)
     return code

@@ -64,6 +64,10 @@ export interface Question {
   route: string[]
   outline: string[]
   model?: string
+  /** "(under 90 seconds)" at the end of its route: how long the answer may run */
+  limit?: number
+  /** The `## ` heading above it that isn't a question (a group: "Motivation", "Behavioural") */
+  group?: string
 }
 
 export interface RubricPoint {
@@ -281,6 +285,10 @@ export function bullets(text: string): string[] {
 }
 
 const stripTick = (s: string) => s.replace(/^\[[ xX]\]\s*/, '')
+/** Bold and italic markers off, for showing text as plain words */
+export const plain = (s: string) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, '$1$2').replace(/__(.+?)__/g, '$1')
+/** "3. Risk types" → "Risk types" */
+const unnumbered = (s: string) => s.replace(/^\d+[.)]\s+/, '')
 
 // ---------- target.md ----------
 
@@ -324,6 +332,52 @@ export function parseTarget(data: Record<string, unknown>, body: string, folder:
   }
 }
 
+/**
+ * Front matter read line by line, for when YAML refuses it (a note with ": " in it, unquoted, is
+ * the usual cause): top-level keys, lists of strings, and lists of maps, each value as written.
+ */
+export function lenientFrontMatter(raw: string): { data: Record<string, unknown>; body: string } {
+  const m = raw.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n?/)
+  if (!m) return { data: {}, body: raw }
+  const data: Record<string, unknown> = {}
+  const scalar = (v: string) => v.trim().replace(/^(['"])(.*)\1$/, '$2')
+  let key = ''
+  let item: Record<string, string> | null = null
+  for (const line of m[1].split('\n')) {
+    if (!line.trim() || /^\s*#/.test(line)) continue
+    const top = line.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
+    if (top) {
+      key = top[1]
+      item = null
+      const v = top[2].trim()
+      if (v === '' || v === '|' || v === '>') data[key] = []
+      else if (/^\[.*\]$/.test(v)) data[key] = v.slice(1, -1).split(',').map(scalar).filter(Boolean)
+      else data[key] = scalar(v)
+      continue
+    }
+    const dash = line.match(/^\s+-\s+(.*)$/)
+    if (dash && key) {
+      const list = Array.isArray(data[key]) ? (data[key] as unknown[]) : (data[key] = [])
+      const kv = dash[1].match(/^([A-Za-z_][\w-]*):\s+(.*)$|^([A-Za-z_][\w-]*):$/)
+      if (kv && !/^https?:/.test(dash[1])) {
+        item = { [kv[1] ?? kv[3]]: scalar(kv[2] ?? '') }
+        list.push(item)
+      } else {
+        item = null
+        list.push(scalar(dash[1]))
+      }
+      continue
+    }
+    const more = line.match(/^\s+([A-Za-z_][\w-]*):\s*(.*)$/)
+    if (more && item) item[more[1]] = scalar(more[2])
+    else if (/^\s+\S/.test(line) && item) {
+      const last = Object.keys(item).at(-1)!
+      item[last] = `${item[last]} ${line.trim()}`.trim()
+    }
+  }
+  return { data, body: raw.replace(/\r\n/g, '\n').slice(m[0].length) }
+}
+
 /** A new target.md, from the New target form */
 export function targetMarkdown(t: { company: string; role: string; date?: string; slidesDue?: string; sources: string[]; links: string[] }): string {
   const q = (s: string) => (/^[\w .,()/&+-]*$/.test(s) && !/^\d/.test(s) && !/:\s/.test(s) ? s : JSON.stringify(s))
@@ -365,27 +419,44 @@ const KIND_OF = (v: string): QuestionKind => {
 }
 
 export function parseQuestions(raw: string): Question[] {
-  return sections(raw)
+  const out: Question[] = []
+  let group: string | undefined
+  sections(raw)
     .filter((s) => s.heading)
-    .map((s, i) => {
-      const { id, title } = idAndTitle(s.heading, `Q${i + 1}`)
+    .forEach((s) => {
       const parts = sections(s.text, 3)
       const head = parts.find((p) => !p.heading)?.text ?? (s.text.split(/^### /m)[0] || '')
-      const model = parts.find((p) => /^model answer/i.test(p.heading))?.text.trim()
       const f = fields(head)
+      // A heading with no fields and no answer is a group of the questions after it
+      if (!Object.keys(f).length && !parts.some((p) => p.heading)) {
+        group = plain(s.heading)
+        return
+      }
+      const { id, title } = idAndTitle(s.heading, `Q${out.length + 1}`)
+      const model = parts.find((p) => /^model answer/i.test(p.heading))?.text.trim()
       const source = f.source?.inline.toLowerCase()
-      return {
+      let routeText = f.route?.inline ?? ''
+      let limit: number | undefined
+      const lim = routeText.match(/\s*\((?:under|at most|max(?:imum)?|about|~)?\s*(\d+(?:\.\d+)?)\s*(seconds?|secs?|s|minutes?|mins?)\)\s*$/i)
+      if (lim) {
+        limit = Math.round(Number(lim[1]) * (/^m/i.test(lim[2]) ? 60 : 1))
+        routeText = routeText.slice(0, lim.index)
+      }
+      out.push({
         id,
-        text: title,
+        text: plain(title),
         ...(f.round?.inline ? { round: f.round.inline } : {}),
         kind: KIND_OF(f.kind?.inline ?? ''),
         ...(source && ['reported', 'likely', 'cv', 'brief'].includes(source) ? { source: source as Question['source'] } : {}),
         stories: listField(f.stories, /[,;\s]+/),
-        route: (f.route?.inline ?? '').split(/\s*(?:→|->|=>|>|\|)\s*/).map(clean).filter(Boolean),
+        route: routeText.split(/\s*(?:→|->|=>|>|\|)\s*/).map(clean).filter(Boolean),
         outline: listField(f.outline, /;/),
-        ...(model ? { model } : {})
-      }
+        ...(model ? { model } : {}),
+        ...(limit ? { limit } : {}),
+        ...(group ? { group } : {})
+      })
     })
+  return out
 }
 
 /** questions.md with a model answer under one question (only where it has none) */
@@ -410,6 +481,16 @@ export function withModelAnswer(raw: string, id: string, answer: string): string
 
 const RUBRIC_GROUPS = ['risk', 'mitigation', 'escalation', 'board', 'communication', 'control', 'regulat']
 
+/** A rubric bullet's group from the label before its colon ("Credit risk", "Controls, 1st line", "Board in 3 points") */
+export function groupOf(label: string): string | null {
+  const l = label.toLowerCase()
+  if (/escalat/.test(l)) return 'escalation'
+  if (/board|communicat|present|tell|stakeholder|message/.test(l)) return 'board'
+  if (/control|mitigat|kri|decision|monitor|limit|fix|action|response|remed/.test(l)) return 'mitigation'
+  if (/risk|compliance|conduct|regulat|reputation|strategic|liquidity|operational|likelihood|impact|exposure|threat|fraud|cyber/.test(l)) return 'risk'
+  return null
+}
+
 export function parseScenarios(raw: string): Scenario[] {
   return sections(raw)
     .filter((s) => s.heading)
@@ -431,9 +512,10 @@ export function parseScenarios(raw: string): Scenario[] {
             }
             const b = line.match(/^\s*(?:[-*]|\d+[.)])\s+(.*)$/)
             if (!b) continue
-            const pre = b[1].match(/^\*{0,2}([A-Za-z ]{3,20})\*{0,2}:\s*(.+)$/)
-            const g = pre && RUBRIC_GROUPS.find((x) => pre[1].toLowerCase().startsWith(x.slice(0, 5)))
-            out.push(g ? { text: clean(pre![2]), group: g === 'regulat' ? 'risk' : g } : { text: clean(b[1]), group: group === 'regulat' ? 'risk' : group })
+            const text = plain(clean(b[1]))
+            const pre = text.match(/^([^:]{3,48}):\s*(.+)$/)
+            const g = pre ? groupOf(pre[1]) : null
+            out.push({ text, group: g ?? (group === 'regulat' ? 'risk' : group) })
           }
           return out
         })
@@ -446,24 +528,29 @@ export function parseScenarios(raw: string): Scenario[] {
 
 export function parsePresentation(raw: string): Presentation {
   const all = sections(raw)
+  const qa = all.find((s) => /^assessor/i.test(s.heading)) ?? all.find((s) => /assessor q/i.test(s.heading))
   const checklist: Presentation['checklist'] = []
-  for (const s of all.filter((x) => !/assessor/i.test(x.heading)))
+  for (const s of all.filter((x) => x !== qa))
     for (const line of s.text.split('\n')) {
       const m = line.match(/^\s*[-*]\s+\[([ xX])\]\s+(.+)$/)
       if (m) checklist.push({ text: clean(m[2]), done: m[1] !== ' ' })
     }
   const topicSec = all.find((s) => /^(chosen )?topic/i.test(s.heading))
-  const topic = clean(topicSec?.text.split(/\n\s*\n/).find((p) => p.trim())?.replace(/^[-*]\s+/, '') ?? '')
-  const researchSec = all.find((s) => /research/i.test(s.heading))
-  const research = researchSec ? sections(researchSec.text, 3).map((s) => s.heading).filter(Boolean) : []
-  const qa = all.find((s) => /assessor/i.test(s.heading))
+  const h1 = raw.match(/^#\s+(.+)$/m)?.[1]
+  const topic = plain(clean(topicSec?.text.split(/\n\s*\n/).find((p) => p.trim())?.replace(/^[-*]\s+/, '') ?? h1?.replace(/^presentation\s*[:—–-]\s*/i, '') ?? ''))
+  // The research section with the most subsections (a one-paragraph summary has none)
+  const research = all
+    .filter((s) => /research/i.test(s.heading))
+    .map((s) => sections(s.text, 3).map((x) => unnumbered(plain(x.heading))).filter(Boolean))
+    .sort((a, b) => b.length - a.length)[0] ?? []
   const assessor: AssessorQuestion[] = []
   if (qa) {
     const subs = sections(qa.text, 3).filter((s) => s.heading)
     if (subs.length)
       subs.forEach((s, i) => {
         const f = fields(s.text)
-        assessor.push({ id: `A${i + 1}`, question: s.heading, point: clean(f.point?.inline || f.stronganswer?.inline || s.text.replace(/^[-*]\s+/gm, '')) })
+        const strong = s.text.match(/(?:^|\n)\s*(?:[-*]\s+)?\*{0,2}(?:point|strong answer)\*{0,2}:\*{0,2}\s*([\s\S]+)/i)?.[1]
+        assessor.push({ id: `A${i + 1}`, question: unnumbered(plain(s.heading)), point: plain(clean(f.point?.inline || f.stronganswer?.inline || strong || s.text.replace(/^[-*]\s+/gm, ''))) })
       })
     else
       bullets(qa.text).forEach((b, i) => {
@@ -481,9 +568,13 @@ export function parsePresentation(raw: string): Presentation {
 
 export function parseFirm(raw: string): FirmFact[] {
   const out: FirmFact[] = []
-  for (const s of sections(raw))
+  const all = sections(raw)
+  const titled = all.some((s) => s.heading)
+  for (const s of all) {
+    // The list of sources and a preamble before the first heading aren't facts
+    if (/^(sources?|references?|key to sources)\b/i.test(s.heading) || (!s.heading && titled)) continue
     for (const b of bullets(s.text)) {
-      let text = stripTick(b)
+      let text = plain(stripTick(b))
       let source: string | undefined
       let date: string | undefined
       const paren = text.match(/\((?:source:\s*)?([^()]*?)(?:,\s*)?(\d{4}(?:-\d{2}(?:-\d{2})?)?)?\)\s*$/i)
@@ -501,8 +592,9 @@ export function parseFirm(raw: string): FirmFact[] {
       }
       const link = text.match(/\[([^\]]+)\]\((https?:[^)]+)\)/)
       if (link && !source) source = link[2]
-      if (text) out.push({ section: s.heading || 'Facts', text, ...(source ? { source } : {}), ...(date ? { date } : {}) })
+      if (text) out.push({ section: unnumbered(plain(s.heading)) || 'Facts', text, ...(source ? { source } : {}), ...(date ? { date } : {}) })
     }
+  }
   return out
 }
 
@@ -512,10 +604,13 @@ export function parseAskThem(raw: string): AskThem {
   const groups: AskThem['groups'] = []
   const rules: string[] = []
   for (const s of sections(raw)) {
-    const qs = bullets(s.text).filter((b) => !/^(rule|never ask)\b/i.test(b))
-    for (const line of s.text.split('\n')) if (/never ask|^rule:/i.test(line.replace(/^[-*>\s]+/, ''))) rules.push(clean(line.replace(/^[-*>\s]+/, '').replace(/^rule:\s*/i, '')))
-    if (/^rules?$/i.test(s.heading)) {
-      rules.push(...qs)
+    const qs = bullets(s.text).map(plain).filter((b) => !/^(rule|never ask)\b/i.test(b))
+    for (const line of s.text.split('\n')) {
+      const t = plain(clean(line.replace(/^\s*(?:[-*]\s+|>\s*)/, '')))
+      if (/never ask|^rule:/i.test(t)) rules.push(t.replace(/^rule:\s*/i, ''))
+    }
+    if (/\brules?\b/i.test(s.heading)) {
+      rules.push(...qs.map((q) => plain(q)))
       continue
     }
     if (qs.length) groups.push({ who: s.heading || 'Anyone', questions: qs })
@@ -524,7 +619,7 @@ export function parseAskThem(raw: string): AskThem {
 }
 
 /** frameworks.md's `## ` headings */
-export const parseFrameworks = (raw: string) => sections(raw).map((s) => s.heading).filter(Boolean)
+export const parseFrameworks = (raw: string) => sections(raw).map((s) => unnumbered(plain(s.heading))).filter(Boolean)
 
 // ---------- Progress ----------
 
@@ -626,7 +721,8 @@ export function itemMark(attempts: Attempt[]): number | null {
 }
 
 /**
- * Each area's readiness: 40% coverage (items tried), 60% the recency-weighted marks. Firm and
+ * Each area's readiness: 15% coverage (items tried), 85% the recency-weighted marks spread over
+ * every item (an untried one counts as 0). Firm and
  * markets also counts card retention (a third of it) when there are cards.
  */
 export function readiness(t: TargetFiles, p: Progress, cards: CardsState | null): AreaReadiness[] {
@@ -641,7 +737,9 @@ export function readiness(t: TargetFiles, p: Progress, cards: CardsState | null)
     const withCards = id === 'firm' && cards && cards.total > 0
     if (!list.length && !withCards) return { area: id, label, score: null, items: 0, attempted: 0, marks: null }
     const coverage = list.length ? known.length / list.length : 0
-    let score = list.length ? 0.4 * coverage + 0.6 * (mean ?? 0) : 0
+    // An untried item counts as nothing, so one good answer can't stand for the whole area
+    const spread = list.length ? marks.reduce((x, y) => x + y, 0) / list.length : 0
+    let score = list.length ? 0.15 * coverage + 0.85 * spread : 0
     if (withCards) {
       const retention = cards!.remembered / cards!.total
       score = list.length ? (2 / 3) * score + (1 / 3) * retention : retention
@@ -902,6 +1000,8 @@ export interface MarkInput {
   checklist?: string[]
   /** The talk's target minutes */
   minutes?: number
+  /** The question's own limit in seconds ("under 90 seconds" in its route) */
+  limit?: number
 }
 
 export interface MarkResult {
@@ -917,7 +1017,8 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 const round2 = (x: number) => Math.round(Math.max(0, Math.min(1, x)) * 100) / 100
 
 /** The window an answer should land in */
-export function targetWindow(i: Pick<MarkInput, 'drill' | 'minutes'>): [number, number] {
+export function targetWindow(i: Pick<MarkInput, 'drill' | 'minutes' | 'limit'>): [number, number] {
+  if (i.limit) return [Math.round(i.limit * 0.55), i.limit]
   return i.drill === 'talk' && i.minutes ? [i.minutes * 60 - 120, i.minutes * 60] : TARGET_SECONDS[i.drill]
 }
 

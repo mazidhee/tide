@@ -105,9 +105,9 @@ function TimeBar({ seconds, window: [lo, hi], spoken }: { seconds: number; windo
 }
 
 /** The answer box: type, or speak (the words land in the box, the time is kept) */
-function AnswerBox({ drill, minutes, value, onChange, seconds, onSeconds, placeholder, busy }: { drill: DrillKind; minutes?: number; value: string; onChange(v: string): void; seconds: number | null; onSeconds(s: number | null): void; placeholder: string; busy?: boolean }) {
+function AnswerBox({ drill, minutes, limit, value, onChange, seconds, onSeconds, placeholder, busy }: { drill: DrillKind; minutes?: number; limit?: number; value: string; onChange(v: string): void; seconds: number | null; onSeconds(s: number | null): void; placeholder: string; busy?: boolean }) {
   const rec = useRecorder()
-  const win = targetWindow({ drill, minutes })
+  const win = targetWindow({ drill, minutes, limit })
   const shown = rec.state === 'listening' ? rec.elapsed : seconds ?? spokenSeconds(value)
   return (
     <div className="it-answer">
@@ -198,7 +198,7 @@ function specOf(b: TargetBundle, drill: DrillKind, item: string): Spec | null {
       item,
       question: q.text,
       eyebrow: [q.kind.replace('-', ' '), round?.name, q.source].filter(Boolean).join(' · '),
-      input: { route: q.route, outline: q.outline, anchors: stories.flatMap((s) => s!.anchors), evidence: stories.flatMap((s) => s!.evidence) },
+      input: { route: q.route, outline: q.outline, anchors: stories.flatMap((s) => s!.anchors), evidence: stories.flatMap((s) => s!.evidence), ...(q.limit ? { limit: q.limit } : {}) },
       model: q.model,
       facts: stories.flatMap((s) => s!.evidence),
       gaps: stories.flatMap((s) => s!.gaps)
@@ -229,7 +229,7 @@ function specOf(b: TargetBundle, drill: DrillKind, item: string): Spec | null {
   if (item === 'talk' && f.presentation) return { drill: 'talk', area: 'presentation', item, question: f.presentation.topic || 'Your presentation', eyebrow: `Timed run · ${f.presentation.minutes} minutes`, input: { checklist: f.presentation.checklist.map((c) => c.text), minutes: f.presentation.minutes } }
   if (kind === 'ask') {
     const g = f.ask.groups.find((x) => x.who === id)
-    return g ? { drill: 'ask', area: 'ask', item, question: `Questions for the ${g.who.toLowerCase()}`, eyebrow: 'Questions to ask', input: {} } : null
+    return g ? { drill: 'ask', area: 'ask', item, question: `Questions for the ${g.who.replace(/\s*\(.*\)\s*$/, "").toLowerCase()}`, eyebrow: 'Questions to ask', input: {} } : null
   }
   if (kind === 'firm') return { drill: 'firm', area: 'firm', item, question: 'Firm facts', eyebrow: 'Recall check', input: {} }
   return null
@@ -386,6 +386,7 @@ function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext }: { slug: s
           <AnswerBox
             drill={spec.drill}
             minutes={spec.input.minutes}
+            limit={spec.input.limit}
             value={answer}
             onChange={setAnswer}
             seconds={seconds}

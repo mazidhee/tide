@@ -13,6 +13,7 @@ import {
   covers,
   emptyProgress,
   fields,
+  lenientFrontMatter,
   idAndTitle,
   itemMark,
   lengthMark,
@@ -38,6 +39,7 @@ import {
   whenText,
   withModelAnswer,
   zoneOffset,
+  targetWindow,
   type Attempt,
   type Progress,
   type TargetFiles
@@ -323,9 +325,9 @@ describe('readiness', () => {
     const p: Progress = { slug: 'x', attempts: [attempt('q:B1', 'behavioural', 0.2, now - 3000), attempt('q:B1', 'behavioural', 0.8, now - 1000)] }
     const b = readiness(t, p, null).find((a) => a.area === 'behavioural')!
     expect(b.attempted).toBe(1)
-    // Latest counts twice: (0.2 + 1.6) / 3 = 0.6; 0.4 × 1/3 + 0.6 × 0.6
+    // Latest counts twice: (0.2 + 1.6) / 3 = 0.6, spread over 3 items; 0.15 × 1/3 + 0.85 × 0.2
     expect(b.marks).toBeCloseTo(0.6)
-    expect(b.score).toBeCloseTo(0.4 / 3 + 0.36)
+    expect(b.score).toBeCloseTo(0.05 + 0.17)
   })
   it('weights recent attempts more, over the last five', () => {
     expect(itemMark([])).toBeNull()
@@ -529,3 +531,167 @@ describe('human writing', () => {
     expect(naturalness('delve delve delve delve delve delve delve delve delve')).toBe(0)
   })
 })
+
+describe('front matter YAML refuses', () => {
+  const raw = `---
+company: Contoso Bank
+role: Analyst (final round)
+date: 2026-11-25T09:00:00Z
+timezone: Europe/London
+course: risk-basics
+sources:
+  - /Users/someone/prep
+links:
+  - https://github.com/example/repo
+  - "https://example.org/a: b"
+rounds:
+  - id: technical
+    name: Technical interview
+    kind: technical
+    minutes: 30
+    notes: Questions first, then a case. Required: a caption of at most 10 words.
+  - id: pres
+    name: Presentation
+    kind: presentation
+    notes: Topic: risk.
+      Slides sent ahead.
+tags: [a, b]
+---
+
+# Body
+`
+  it('YAML itself refuses it', () => {
+    expect(() => matter(raw)).toThrow()
+  })
+  it('reads it line by line instead', () => {
+    const l = lenientFrontMatter(raw)
+    const t = parseTarget(l.data, l.body, 'Interview prep/Contoso', raw)
+    expect(t.company).toBe('Contoso Bank')
+    expect(t.date).toBe('2026-11-25T09:00:00Z')
+    expect(t.timezone).toBe('Europe/London')
+    expect(t.course).toBe('risk-basics')
+    expect(t.sources).toEqual(['/Users/someone/prep'])
+    expect(t.links).toEqual(['https://github.com/example/repo', 'https://example.org/a: b'])
+    expect(t.rounds.map((r) => [r.id, r.kind, r.minutes])).toEqual([
+      ['technical', 'technical', 30],
+      ['pres', 'presentation', undefined]
+    ])
+    expect(t.rounds[0].notes).toMatch(/Required: a caption/)
+    expect(t.rounds[1].notes).toBe('Topic: risk. Slides sent ahead.')
+    expect(l.data.tags).toEqual(['a', 'b'])
+    expect(l.body.trim()).toBe('# Body')
+    expect(lenientFrontMatter('no front matter').data).toEqual({})
+  })
+})
+
+describe('files as people really write them', () => {
+  it('reads group headings, time limits and bold in questions.md', () => {
+    const q = parseQuestions(`# Question bank
+
+Intro text.
+
+## Motivation (most important)
+
+## mot-01. Tell me about **yourself**.
+- Round: r1
+- Kind: motivation
+- Route: Who I am → Why this → Why here (under 90 seconds)
+- Outline:
+  - First point
+    - a detail under it
+
+## Behavioural
+
+## beh-01. A time you disagreed.
+- Kind: behavioural
+- Route: Situation → Action → Result (2 minutes)
+`)
+    expect(q.map((x) => x.id)).toEqual(['mot-01', 'beh-01'])
+    expect(q[0]).toMatchObject({ text: 'Tell me about yourself.', group: 'Motivation (most important)', limit: 90 })
+    expect(q[0].route).toEqual(['Who I am', 'Why this', 'Why here'])
+    expect(q[0].outline).toEqual(['First point', 'a detail under it'])
+    expect(q[1]).toMatchObject({ group: 'Behavioural', limit: 120 })
+    expect(targetWindowOf(90)).toEqual([50, 90])
+  })
+  it('groups rubric bullets by their labels', () => {
+    const c = parseScenarios(`## S1. Case
+### Part 1
+Something happens.
+### Rubric
+- Credit risk: defaults rise
+- Controls, 1st line: caps on volume
+- KRIs: approval-rate gap
+- Escalation (Part 3): tell the CRO
+- Board in 3 points: (1) losses (2) caps (3) next steps
+- Something with no label
+`)
+    expect(c[0].rubric.map((r) => r.group)).toEqual(['risk', 'mitigation', 'mitigation', 'escalation', 'board', 'general'])
+    expect(c[0].rubric[0].text).toBe('Credit risk: defaults rise')
+  })
+  it('reads assessor questions with "Strong answer:" paragraphs, and the topic from the title', () => {
+    const p = parsePresentation(`# Presentation: Supplier risk at a bank
+
+15 minutes presenting.
+
+## Brief checklist
+- [ ] Key message in **10 words**
+
+## Opportunities (assessors asked for risks and opportunities)
+- **Speed.** Faster checks.
+
+## Research pack
+### 1. Credit risk
+### 2. Market risk
+
+## What the research says in one paragraph
+Short.
+
+## Assessor questions
+
+Practise each in 90 seconds.
+
+### 1. Why this topic?
+Strong answer: a reason tied to you, and a risk reason.
+
+### 2. **How** would you measure it?
+- Point: incidents and time to detect.
+`)
+    expect(p.topic).toBe('Supplier risk at a bank')
+    expect(p.research).toEqual(['Credit risk', 'Market risk'])
+    expect(p.checklist.map((c) => c.text)).toEqual(['Key message in **10 words**'])
+    expect(p.assessor.map((a) => [a.question, a.point])).toEqual([
+      ['Why this topic?', 'a reason tied to you, and a risk reason.'],
+      ['How would you measure it?', 'incidents and time to detect.']
+    ])
+  })
+  it('skips the sources preamble in firm.md and plain-texts bold', () => {
+    const f = parseFirm(`# Facts
+
+- **AR 2025**: the annual report
+
+## 1. Strategy
+- **Purpose**: "to help". (10-K 2025, Managing Risk section)
+
+## Sources
+- [S1] https://example.org
+`)
+    expect(f).toHaveLength(1)
+    expect(f[0]).toMatchObject({ section: 'Strategy', text: 'Purpose: "to help".', source: '10-K 2025, Managing Risk section' })
+  })
+  it('reads "The rule" in ask-them.md as rules', () => {
+    const a = parseAskThem(`# Ask
+
+## The rule
+
+- **Never ask about something they covered.** Listen first.
+- Ask one or two.
+
+## Recruiter (end of the day)
+- What happens next?
+`)
+    expect(a.rules).toEqual(['Never ask about something they covered. Listen first.', 'Ask one or two.'])
+    expect(a.groups.map((g) => g.who)).toEqual(['Recruiter (end of the day)'])
+  })
+})
+
+const targetWindowOf = (limit: number) => targetWindow({ drill: 'behavioural', limit })

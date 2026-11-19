@@ -315,7 +315,8 @@ const TITLES: Record<string, string> = {
   help: 'Guide',
   settings: 'Settings',
   workshop: 'Projects',
-  projects: 'Projects'
+  projects: 'Projects',
+  interview: 'Interview prep'
 }
 
 const base = (p: string) => p.replace(/\/+$/, '').split('/').pop() ?? p

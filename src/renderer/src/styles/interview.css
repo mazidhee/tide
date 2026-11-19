@@ -8,6 +8,10 @@
   max-width: 920px;
 }
 
+.it-page .page-inner.narrow {
+  max-width: 760px;
+}
+
 .it-eyebrow {
   display: block;
   font-size: var(--text-2xs);
@@ -443,6 +447,14 @@
   padding: 8px 10px;
 }
 
+.it-rounds .it-row-main {
+  flex: 1;
+}
+
+.it-rounds .it-row-meta {
+  white-space: normal;
+}
+
 .it-rounds .btn {
   display: inline-flex;
   align-items: center;
@@ -693,6 +705,7 @@
 }
 
 .it-route li {
+  line-height: 16px;
   counter-increment: route;
   display: inline-flex;
   align-items: center;
@@ -714,6 +727,7 @@
   background: var(--bg-raised);
   font-size: 10px;
   font-weight: 600;
+  line-height: 1;
   color: var(--ink-muted);
 }
 

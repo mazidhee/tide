@@ -114,7 +114,7 @@ function Row({ id, title, meta, mark, tries, onClick }: { id?: string; title: st
 }
 
 function Slot({ slot, onReview }: { slot: ReviewSlot; onReview(): void }) {
-  const text = slot.state === 'due' ? `${slot.due} due` : slot.state === 'done' ? `Done, ${slot.reviewed} reviewed` : slot.state === 'later' ? `${slot.due} more by tonight` : slot.state === 'missed' ? 'Missed' : 'Nothing due'
+  const text = slot.state === 'due' ? `${slot.due} due` : slot.state === 'done' ? `Done, ${slot.reviewed} reviewed` : slot.state === 'later' ? `${slot.due} more by tonight` : slot.state === 'missed' ? 'Not done this morning' : 'Nothing due'
   return (
     <div className={`it-slot is-${slot.state}`}>
       <span className="it-slot-label">{slot.label}</span>
@@ -467,7 +467,7 @@ export function InterviewTarget({ slug, drill, mode: wantMode }: { slug: string;
                     <li key={r.id}>
                       <span className="it-row-main">
                         <span className="it-row-title">{r.name}</span>
-                        <span className="it-row-meta">{[r.kind === 'hirevue' ? 'recorded video' : r.kind, r.minutes ? `${r.minutes} min` : '', r.notes].filter(Boolean).join(' · ')}</span>
+                        <span className="it-row-meta">{[r.kind === 'hirevue' ? 'Recorded video' : r.kind[0].toUpperCase() + r.kind.slice(1), r.minutes ? `${r.minutes} min` : '', r.notes].filter(Boolean).join(' · ')}</span>
                       </span>
                       {/* Live mock: the voice round itself is built in components/interview/LiveMock* */}
                       <button className="btn small" onClick={() => liveMock(r.id)}>
@@ -620,7 +620,7 @@ export function InterviewTarget({ slug, drill, mode: wantMode }: { slug: string;
                   ))}
                   <ul className="it-rows">
                     {f.ask.groups.map((g) => (
-                      <Row key={g.who} title={g.who} meta={`${g.questions.length} question${g.questions.length === 1 ? '' : 's'}`} {...markOf(`ask:${g.who}`)} onClick={() => go('ask', `ask:${g.who}`)} />
+                      <Row key={g.who} title={g.who.replace(/\s*\(.*\)\s*$/, '')} meta={`${g.questions.length} question${g.questions.length === 1 ? '' : 's'}`} {...markOf(`ask:${g.who}`)} onClick={() => go('ask', `ask:${g.who}`)} />
                     ))}
                   </ul>
                 </>
