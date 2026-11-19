@@ -14,6 +14,7 @@ import './styles/theme.css'
 import './styles/app.css'
 import './styles/prose.css'
 import './styles/lab.css'
+import './styles/pylab.css'
 import './styles/sims.css'
 import './styles/simKinds.css'
 import './styles/visuals.css'
@@ -68,6 +69,7 @@ import { resolveDesign } from '@shared/design'
 import { AppProvider } from './state'
 import App from './App'
 import { startLab } from './lib/lab'
+import { startPyLab } from './lib/pyLab'
 import { startMermaid } from './lib/mermaid'
 import { startLightbox } from './lib/lightbox'
 import { startSims } from './lib/sims'
@@ -88,6 +90,7 @@ window.tide.settings.get().then((settings) => {
   document.documentElement.dataset.design = resolveDesign(settings.design)
   startMermaid()
   startLab()
+  startPyLab()
   startSims()
   startChallenges()
   startGraphs()

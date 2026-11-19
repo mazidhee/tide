@@ -1061,6 +1061,8 @@ export interface TideApi {
     metrics(): Promise<{ host: string; pid: number; mb: number; cpu: number }[]>
     /** A Python snippet traced for TideMachine.python (main/pyTrace) */
     trace(code: string): Promise<{ trace?: import('./pyTrace').PyTrace; error?: string }>
+    /** A program for the Python lab, traced one bytecode instruction at a time (shared/pyLab) */
+    traceLab(code: string): Promise<{ trace?: import('./pyTrace').PyTrace; error?: string }>
     /** A ```draw block's visual: kept, Tide's own, or written now by the visual model (main/conceptVisuals) */
     concept(req: { concept: string; show?: string; topic?: string; redraw?: boolean }): Promise<VisualSource>
     /** A module part's big picture, a 3D scene; fallback is Tide's own 2D visual for it */

@@ -13,7 +13,7 @@ import { APP_CSP } from '@shared/appCsp'
 import { VISUAL_SCHEME_PRIVILEGES, blockVisualRequests, denyVisualPermissions, devFrameSrc, guardVisualFrames, handleVisualProtocol, killVisual, unwatchVisual, visualMetrics, watchVisual } from './visualFrames'
 import { lessonVisuals, rememberVisual, repairVisual, visualFallback, visualPolicy } from './visuals'
 import { dropVisual, keepVisual, partOfTopic, partScene, partsOfModule, visualFeedback, visualForConcept } from './conceptVisuals'
-import { traceSnippet } from './pyTrace'
+import { traceLab, traceSnippet } from './pyTrace'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { CompanyPrepRequest, OutlineDraftRequest, ChatRequest, ChatScope, LearningStatus, ReviewGrade, Settings, PdfHighlight, TutorThread } from '@shared/types'
@@ -437,6 +437,8 @@ function registerIpc() {
   handle('visuals:repair', (req: { code: string; errors: string[]; scope: unknown; scene?: boolean }) => repairVisual(req))
   // Python traced for a visual (main/pyTrace); visuals kept per concept and per module part (main/conceptVisuals)
   handle('visuals:trace', (code: string) => traceSnippet(code))
+  // The Python lab (shared/pyLab): a program traced one bytecode instruction at a time
+  handle('visuals:traceLab', (code: string) => traceLab(code))
   handle('visuals:concept', (req: { concept: string; show?: string; topic?: string; redraw?: boolean }) => visualForConcept(req))
   handle('visuals:part', (req: { module: string; part: number; redraw?: boolean; wait?: boolean }) => partScene(req))
   handle('visuals:partOf', (topic: string) => partOfTopic(topic))

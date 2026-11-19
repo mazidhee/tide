@@ -187,6 +187,10 @@ export function PracticeView() {
               <Icon name="terminal" />
               <span>Linux lab</span>
             </button>
+            <button className="tool-btn" onClick={() => app.setView({ kind: 'pylab' })} title="Step through Python: bytecode, the call stack and memory">
+              <Icon name="stepInto" />
+              <span>Python lab</span>
+            </button>
           </div>
         </header>
 

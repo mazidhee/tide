@@ -35,6 +35,12 @@ The debrief scores each rubric item from 0 to 4, quotes the moments that decided
 
 A real terminal in a throwaway Ubuntu container (needs Docker Desktop). The tutor asks what you know, gives you commands to try, sets up exercise files and checks what you typed. You're root, and nothing in the lab can touch your Mac; **Fresh lab** gives you a clean one. **Cards** turns the commands you ran into flashcards.
 
+## Python lab
+
+**Python lab** (in Practice's tools) runs a short program once, sandboxed, on your Mac's Python and lets you step through it, forwards and back, a line or one bytecode instruction at a time. Beside the code you see the bytecode of the running function with the next instruction explained, the call stack with each frame's names, and every object those names reach: its id, type and size, an int's base-2^30 digits, a list's spare capacity. New and changed objects are marked; hovering a name lights the object it points at. The starter programs cover Python's internals (references, frames and recursion, ints, list growth, immutable strings, loops in bytecode, closures, mutable defaults, instances, exceptions). **Edit** changes the program and **Trace** (<kbd>⌘Enter</kbd>) runs it again. Use <kbd>←</kbd> <kbd>→</kbd> to step, <kbd>Space</kbd> to play.
+
+In a Python lesson the tutor puts one in as it teaches each mechanism, and every Python code block has **Step through**, which turns it into a lab in place.
+
 ## Playground
 
 A small editor using VS Code's editor. <kbd>⌘Enter</kbd> runs Python or JavaScript with the file's folder beside it, so a project can import its own modules and read its data files. Python can use NumPy, pandas and Matplotlib once set up, and charts appear under the output. The tutor beside it pair-programs with you: it sees the file and what it printed.

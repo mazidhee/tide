@@ -1,3 +1,4 @@
+import { isLabFence } from '@shared/pyLab'
 import { readingHtml } from './reading'
 import { quoteHtml } from './primaryQuote'
 import { explainerForUrl, type Explainer } from '@shared/explainers'
@@ -371,11 +372,15 @@ export function createMarkdown() {
     typographer: true,
     breaks: false,
     highlight: (code, lang) => {
-      const language = lang && hljs.getLanguage(lang) ? lang : null
+      // A Python lab (lib/pyLab) is Python while it streams in
+      const shown = isLabFence(lang || '') ? 'python' : lang
+      const language = shown && hljs.getLanguage(shown) ? shown : null
       const html = language ? hljs.highlight(code, { language, ignoreIllegals: true }).value : escapeHtml(code)
       // Every language the sandbox runs (main/languages); one whose toolchain or pack is missing says how to add it
       const runnable = /^(python|py|javascript|js|typescript|ts|c|cpp|c\+\+|rust|rs|go|swift|java|ruby|rb|bash|sh|zsh|solidity|sol)$/i.test(lang)
-      return `<pre class="code-block" data-lang="${escapeHtml(lang || '')}">${runnable ? '<button class="run-code" type="button">Run</button>' : ''}<button class="copy-code" type="button">Copy</button><code class="hljs">${html}</code></pre>`
+      // Python can also be stepped through in the Python lab: bytecode, frames and objects
+      const steppable = /^(python|py|python3)$/i.test(lang)
+      return `<pre class="code-block" data-lang="${escapeHtml(lang || '')}">${steppable ? '<button class="step-code" type="button" title="Step through it: bytecode, call stack and memory">Step through</button>' : ''}${runnable ? '<button class="run-code" type="button">Run</button>' : ''}<button class="copy-code" type="button">Copy</button><code class="hljs">${html}</code></pre>`
     }
   })
 

@@ -344,6 +344,8 @@ export function tabTitle(v: TabView, own?: string): string {
       return 'Comprehension'
     case 'lab':
       return v.terminal === 'local' ? 'Terminal' : 'Linux lab'
+    case 'pylab':
+      return 'Python lab'
     case 'session':
     case 'quiz':
     case 'code':
@@ -400,6 +402,8 @@ export function tabIcon(v: TabView): string {
     case 'lab':
     case 'practice':
       return 'terminal'
+    case 'pylab':
+      return 'stepInto'
     case 'code':
       return 'files'
     case 'ipynb':

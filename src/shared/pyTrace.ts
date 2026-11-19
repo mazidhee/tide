@@ -31,11 +31,26 @@ export interface PyFrame {
   name: string
   line: number
   names: [string, string][]
+  /** The Python lab's traces: the index in the trace's codes of the code this frame runs, and the offset of its next instruction */
+  code?: number
+  at?: number
+}
+
+/** One instruction of a code object: offset, opname, its argument as dis shows it, source line, whether a jump lands on it (1) */
+export type PyOp = [number, string, string, number, number]
+
+/** A code object as dis.get_instructions gives it (a module, a function, a comprehension) */
+export interface PyCode {
+  name: string
+  /** co_firstlineno */
+  first: number
+  ops: PyOp[]
 }
 
 export interface PyStep {
   line: number
-  event: 'line' | 'return' | 'exception'
+  /** opcode: the Python lab's traces, a step before each bytecode instruction */
+  event: 'line' | 'opcode' | 'return' | 'exception'
   frames: PyFrame[]
   /** Indexes into the trace's objects: what was reachable at this step */
   heap: number[]
@@ -51,11 +66,18 @@ export interface PyTrace {
   ok: boolean
   steps: PyStep[]
   objects: PyObject[]
+  /** The Python lab's traces: each code object that ran, disassembled */
+  codes?: PyCode[]
+  /** The Python that ran it ("3.15.0"); bytecode differs from version to version */
+  version?: string
   error?: string
   stopped?: string
 }
 
 export const MAX_TRACE_SOURCE = 2000
+/** The Python lab: a longer program, and a step per instruction */
+export const MAX_LAB_SOURCE = 4000
+export const MAX_LAB_STEPS = 2000
 /** The trace as it goes into the frame, in characters of JSON */
 export const MAX_TRACE_JSON = 90_000
 
@@ -80,8 +102,8 @@ export function dedent(s: string): string {
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : undefined)
 const isRef = (v: unknown): v is string => typeof v === 'string' && /^0x[0-9a-f]{1,16}$/.test(v)
 
-/** A trace as the tracer wrote it, checked field by field; null when it isn't one */
-export function cleanTrace(raw: unknown): PyTrace | null {
+/** A trace as the tracer wrote it, checked field by field; null when it isn't one. maxSteps: 400 for a visual, more for the lab */
+export function cleanTrace(raw: unknown, maxSteps = 400): PyTrace | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   if (!Array.isArray(o.steps) || !Array.isArray(o.objects)) return null
@@ -101,26 +123,42 @@ export function cleanTrace(raw: unknown): PyTrace | null {
     objects.push(obj)
   }
   const steps: PyStep[] = []
-  for (const x of o.steps.slice(0, 400)) {
+  const codes: PyCode[] = []
+  if (Array.isArray(o.codes))
+    for (const x of o.codes.slice(0, 200)) {
+      const c = (x ?? {}) as Record<string, unknown>
+      const ops = Array.isArray(c.ops)
+        ? c.ops
+            .slice(0, 3000)
+            .filter((op): op is unknown[] => Array.isArray(op) && typeof op[0] === 'number' && typeof op[1] === 'string')
+            .map((op): PyOp => [op[0] as number, String(op[1]).slice(0, 40), typeof op[2] === 'string' ? op[2].slice(0, 80) : '', typeof op[3] === 'number' ? op[3] : 0, op[4] === 1 ? 1 : 0])
+        : []
+      codes.push({ name: str(c.name, 60) ?? '?', first: typeof c.first === 'number' ? c.first : 0, ops })
+    }
+  for (const x of o.steps.slice(0, maxSteps)) {
     if (!x || typeof x !== 'object') return null
     const s = x as Record<string, unknown>
-    if (typeof s.line !== 'number' || !Array.isArray(s.frames) || !Array.isArray(s.heap)) return null
-    const event = s.event === 'return' || s.event === 'exception' ? s.event : 'line'
+    if (!Array.isArray(s.frames) || !Array.isArray(s.heap)) return null
+    const event = s.event === 'return' || s.event === 'exception' || s.event === 'opcode' ? s.event : 'line'
     const frames: PyFrame[] = s.frames.slice(0, 40).map((f) => {
       const fr = (f ?? {}) as Record<string, unknown>
       return {
         name: str(fr.name, 60) ?? '?',
         line: typeof fr.line === 'number' ? fr.line : 0,
-        names: Array.isArray(fr.names) ? fr.names.slice(0, 40).filter((n): n is [string, string] => Array.isArray(n) && typeof n[0] === 'string' && isRef(n[1])).map(([k, r]) => [k.slice(0, 40), r]) : []
+        names: Array.isArray(fr.names) ? fr.names.slice(0, 40).filter((n): n is [string, string] => Array.isArray(n) && typeof n[0] === 'string' && isRef(n[1])).map(([k, r]) => [k.slice(0, 40), r]) : [],
+        ...(Number.isInteger(fr.code) && (fr.code as number) >= 0 && (fr.code as number) < codes.length && typeof fr.at === 'number' ? { code: fr.code as number, at: fr.at } : {})
       }
     })
-    const step: PyStep = { line: s.line, event, frames, heap: s.heap.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < objects.length), out: str(s.out, 4000) ?? '' }
+    const step: PyStep = { line: typeof s.line === 'number' ? s.line : 0, event, frames, heap: s.heap.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < objects.length), out: str(s.out, 4000) ?? '' }
     if (isRef(s.ret)) step.ret = s.ret
     const exc = str(s.exc, 200)
     if (exc) step.exc = exc
     steps.push(step)
   }
-  const t: PyTrace = { code: str(o.code, 4000) ?? '', ok: o.ok === true, steps, objects }
+  const t: PyTrace = { code: str(o.code, MAX_LAB_SOURCE) ?? '', ok: o.ok === true, steps, objects }
+  if (codes.length) t.codes = codes
+  const version = str(o.version, 20)
+  if (version) t.version = version
   const error = str(o.error, 300)
   if (error) t.error = error
   const stopped = str(o.stopped, 120)
