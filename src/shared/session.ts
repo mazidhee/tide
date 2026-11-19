@@ -337,6 +337,8 @@ export interface SessionSetup {
     placement?: PlacementSetup
     /** A refresher (a lesson): learned before, rusty; practice first, explain only what's missed */
     refresh?: boolean
+    /** New to the subject (a lesson): explain from zero before any question; no placement probe */
+    fromZero?: boolean
     /** Why mode: Socratic, from first principles, the reasons behind each rule (Settings › Your tutor) */
     why?: boolean
     /** The subject's profile when already decided (a roadmap's, or the model's); else read off the topic (src/shared/subjects.ts) */
@@ -460,6 +462,12 @@ export function sessionInstructions(setup: SessionSetup): string {
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 
+/** New to the subject: no quiz before teaching; plain words, then the idea, then one question */
+const FROM_ZERO = `1. START FROM ZERO: they are new to this subject and told you so. Don't probe or quiz before teaching. Open with the big picture in plain words: what this is, why it matters in the job, and one concrete real example. Define every term the first time you use it, and keep labels (codes, roadmap names, model names) out of what you say. Ask your first question only after you've explained the idea, and make it a think question.`
+
+/** Mark what they meant, not how they typed it */
+const FAIR_MARKING = `Mark the substance: if their reasoning reaches the right idea in loose or misspelt words, it's correct; say what they got right, then give the sharper wording. "Partly right" only for a real gap in the idea, never for phrasing.`
+
 function baseInstructions({ mode, topic, options }: SessionSetup): string {
   const difficulty = options?.difficulty ?? 'normal'
   if (mode === 'teach' && options?.refresh) return `Topic: ${topic}.\n${REFRESH_RULES}\n- ${lightPlan('one step per problem, 2 or 3 in all', true)}\n${MAP_RULES}\n`
@@ -479,12 +487,12 @@ function baseInstructions({ mode, topic, options }: SessionSetup): string {
       ? `Walk these steps in this order, one per turn, naming each part exactly as written here (the app draws each step on the canvas as soon as you name where it arrives):\n${options.flow.map((s, i) => `   ${i + 1}. ${s.from} → ${s.to}: ${s.label}`).join('\n')}\n   Before each step, ask them to predict where it goes next (a predict ask); then explain what happens there and what can go wrong.`
       : ''
     return `You are running a TEACH session on: ${topic}.
-1. PROBE: ask one or two short questions, one at a time, to find what they already know. Don't teach yet.
+${options.fromZero ? FROM_ZERO : "1. PROBE: ask one or two short questions, one at a time, to find what they already know. Don't teach yet."}
 2. ${lightPlan(flow ? 'one step per stage of the flow, grouping small stages so there are 3 to 5' : options.strategy === 'dialogue' ? 'one step per part of the question you will think through together' : '3 to 5 steps')}
 3. Then teach it this way: ${flow ? 'trace it step by step like following one real record through the system.' : STRATEGY_RULES[options.strategy]}
    ${flow || (first[options.strategy] ?? '')}
 ${MAP_RULES}${options.strategy === 'code' || options.strategy === 'lab' ? `\n${TUTORIAL}` : ''}
-4. Grade every answer but a think one (never graded: reply in conversation). Move on when they have it; when they don't, point at exactly what's missing and try again a smaller step.
+4. Grade every answer but a think one (never graded: reply in conversation). ${FAIR_MARKING} Move on when they have it; when they don't, point at exactly what's missing and try again a smaller step.
 When you explain an idea, also write it for their notes: <note>the key idea in 1 to 5 lines of Markdown (up to 12 for notation, a formula or a worked example), worth rereading later</note>.${options?.project ? projectRules(options.project) : ''}
 When it's done, write <summary>what they learned, what is still shaky, what to look at next</summary>.`
   }
@@ -492,7 +500,7 @@ When it's done, write <summary>what they learned, what is still shaky, what to l
     const extra = options?.project ? projectRules(options.project) : ''
     const start = difficulty === 'hard' ? 'at a hard level' : difficulty === 'gentle' ? 'gently' : 'one notch below where the probe placed them'
     return `You are running a TEACH session on: ${topic}. Teach it as a tutorial, like a superb tutor with one student: explain each idea properly first, then they think it through and practise.
-1. PROBE: place them with 2 or 3 short questions (never more), one at a time. Start near the hardest thing this topic needs; after a confident right answer, step up; after a miss, step down. Stop once you know where they're solid and where they break. Don't teach yet.
+${options?.fromZero ? FROM_ZERO : "1. PROBE: place them with 2 or 3 short questions (never more), one at a time. Start near the hardest thing this topic needs; after a confident right answer, step up; after a miss, step down. Stop once you know where they're solid and where they break. Don't teach yet."}
 2. PLAN: from what you learned, write a short path (3 to 6 steps) to the goal, skipping what they've shown they know; it's their map:
 <plan>
 Goal: By the end you can …
@@ -501,7 +509,7 @@ Goal: By the end you can …
 3. TEACH each step in this order: big picture, mechanism, practice, check.
 ${MAP_RULES}
 ${TUTORIAL}
-   - CHECK: 1 or 2 graded checkpoints end each step (problem, code, error, short, choice or explain asks), one problem per message, starting ${start}. Start each with its place, like "**Problem 2 · harder**". Right first time: harder next. Wrong: point at the exact step that fails, re-teach that piece, then a near-identical one. Pass the step on a checkpoint right without hints (at most 4). Never ask "does that make sense?".
+   - CHECK: 1 or 2 graded checkpoints end each step (problem, code, error, short, choice or explain asks), one problem per message, starting ${start}. Start each with its place, like "**Problem 2 · harder**". ${FAIR_MARKING} Right first time: harder next. Wrong: point at the exact step that fails, re-teach that piece, then a near-identical one. Pass the step on a checkpoint right without hints (at most 4). Never ask "does that make sense?".
    When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown (up to 12 when it spells out notation or works an example), worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). Notes are only for the ideas this lesson is about, ${topic}: never a side fact (a date, a definition of an everyday word, how centuries are counted). A note never stands in for a miss’s flashcard: write the <card> too.
 4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.${extra}
 When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`

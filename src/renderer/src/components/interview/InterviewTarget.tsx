@@ -204,7 +204,7 @@ export function InterviewTarget({ slug, drill, mode: wantMode, script }: { slug:
     go(p.drill, p.item)
   }
   const teach = (topic: string, path?: string) =>
-    app.setView({ kind: 'session', mode: 'teach', scope: path ? { kind: 'note', path } : { kind: 'folder', path: meta.folder }, topic, nonce: Date.now() })
+    app.setView({ kind: 'session', mode: 'teach', scope: path ? { kind: 'note', path } : { kind: 'folder', path: meta.folder }, topic, options: { fromZero: true }, nonce: Date.now() })
   const liveMock = (round: string) =>
     // Slot for the live voice mock (built separately: shared/interviewMock, components/interview/LiveMock*)
     app.setView({ kind: 'interview-mock', slug, round })
@@ -366,7 +366,7 @@ export function InterviewTarget({ slug, drill, mode: wantMode, script }: { slug:
               open
               action={
                 nextModule && course ? (
-                  <button className="btn small primary" onClick={() => app.setView({ kind: 'session', mode: 'teach', scope: course.notebook ? { kind: 'folder', path: course.notebook } : { kind: 'folder', path: meta.folder }, topic: nextModule.next!, nonce: Date.now() })}>
+                  <button className="btn small primary" onClick={() => app.setView({ kind: 'session', mode: 'teach', scope: course.notebook ? { kind: 'folder', path: course.notebook } : { kind: 'folder', path: meta.folder }, topic: nextModule.next!, options: { fromZero: true }, nonce: Date.now() })}>
                     Next lesson
                   </button>
                 ) : undefined
@@ -386,7 +386,7 @@ export function InterviewTarget({ slug, drill, mode: wantMode, script }: { slug:
                       </span>
                       <span className="it-mod-value tabular">{m.status === 'locked' ? 'Waiting' : m.status === 'passed' ? 'Passed' : `${m.solid} of ${m.total}`}</span>
                       {m.next && m.status !== 'locked' ? (
-                        <button className="link-btn small" title={m.next} onClick={() => app.setView({ kind: 'session', mode: 'teach', scope: course.notebook ? { kind: 'folder', path: course.notebook } : { kind: 'folder', path: meta.folder }, topic: m.next!, nonce: Date.now() })}>
+                        <button className="link-btn small" title={m.next} onClick={() => app.setView({ kind: 'session', mode: 'teach', scope: course.notebook ? { kind: 'folder', path: course.notebook } : { kind: 'folder', path: meta.folder }, topic: m.next!, options: { fromZero: true }, nonce: Date.now() })}>
                           Learn
                         </button>
                       ) : (
