@@ -71,7 +71,17 @@ export function LiveMockCall({
   const [typed, setTyped] = useState('')
   const [typing, setTypingState] = useState(!loaded.voice)
   const typingRef = useRef(typing)
-  const setTyping = (v: boolean | ((t: boolean) => boolean)) => setTypingState((t) => (typingRef.current = typeof v === 'function' ? v(t) : v))
+  const setTyping = (v: boolean | ((t: boolean) => boolean)) =>
+    setTypingState((t) => {
+      const on = typeof v === 'function' ? v(t) : v
+      typingRef.current = on
+      // Switching mid-turn: the mic follows, and the badge says which
+      if (yourTurn.current) {
+        mic.current?.setActive(!on)
+        setYou(on ? 'typing' : micMode === 'ptt' ? 'waiting' : 'listening')
+      }
+      return on
+    })
   const [error, setError] = useState<string | null>(null)
   const [showTranscript, setShowTranscript] = useState(false)
   const [slide, setSlide] = useState(0)
@@ -130,7 +140,8 @@ export function LiveMockCall({
     setLive('')
     setYou(typingRef.current || !canHear ? 'typing' : micMode === 'ptt' ? 'waiting' : 'listening')
     mic.current?.setAutoEnd(cursor.current.stage !== 'presenting')
-    mic.current?.setActive(true)
+    // Typing: the mic stays off, so nothing it hears mixes into the answer
+    mic.current?.setActive(!typingRef.current)
   }
 
   /** One interviewer line, streamed and spoken */
@@ -280,12 +291,12 @@ export function LiveMockCall({
             void text.then((t) => t && setLive((cur) => (cur ? `${cur} ${t}` : t)))
           },
           onEnd: () => void endRef.current(),
-          onSpeech: (on) => yourTurn.current && setYou(on ? 'speaking' : 'listening')
+          onSpeech: (on) => yourTurn.current && !typingRef.current && setYou(on ? 'speaking' : 'listening')
         })
           .then((m) => {
             if (dead) return m.stop()
             mic.current = m
-            if (yourTurn.current) (m.setAutoEnd(cursor.current.stage !== 'presenting'), m.setActive(true))
+            if (yourTurn.current) (m.setAutoEnd(cursor.current.stage !== 'presenting'), m.setActive(!typingRef.current))
           })
           .catch(() => {
             setTyping(true)
