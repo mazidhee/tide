@@ -51,6 +51,8 @@ export interface WorkProject {
   defend: string[]
   /** The finished piece of work this project redoes (front matter `reference:`), e.g. a dashboard's id or address in the company Metabase: its cards are the reference answers, run on the practice data. Never sent to the window */
   reference?: string
+  /** Drafted from a new request from their job (front matter `kind: new-task`, shared/workTask): nobody has decided its decision points yet, so `decided` is the usual choice, to confirm with whoever asked */
+  fresh?: boolean
 }
 
 /** What the window and the tutor may see before anything is answered: no rubric, no decided choices */
@@ -65,6 +67,7 @@ export interface WorkProjectPublic {
   steps: WorkStep[]
   decisions: { id: string; title: string; step: number; ask: string }[]
   defend: string[]
+  fresh?: boolean
 }
 
 export interface WorkCard {
@@ -76,6 +79,7 @@ export interface WorkCard {
   decisions: number
   answered: number
   done: boolean
+  fresh?: boolean
 }
 
 const clean = (s: string) => s.replace(/\r/g, '').trim()
@@ -190,14 +194,14 @@ export function parseWorkProject(md: string, fileSlug = ''): { project: WorkProj
   if (problems.length && !brief && !steps.length) return { project: null, problems }
   const skills = Array.isArray(meta.skills) ? meta.skills : meta.skills ? String(meta.skills).split(',').map((x) => x.trim()) : []
   return {
-    project: { slug, title, order: Number(meta.order) || 99, difficulty: Number(meta.difficulty) || undefined, skills, stakeholder: meta.stakeholder ? String(meta.stakeholder) : undefined, brief, rubric, steps, decisions, defend, ...(meta.reference ? { reference: String(meta.reference) } : {}) },
+    project: { slug, title, order: Number(meta.order) || 99, difficulty: Number(meta.difficulty) || undefined, skills, stakeholder: meta.stakeholder ? String(meta.stakeholder) : undefined, brief, rubric, steps, decisions, defend, ...(meta.reference ? { reference: String(meta.reference) } : {}), ...(String(meta.kind ?? '').toLowerCase() === 'new-task' ? { fresh: true } : {}) },
     problems
   }
 }
 
 /** The project without anything that would give the answers away */
 export function publicView(p: WorkProject): WorkProjectPublic {
-  return { slug: p.slug, title: p.title, order: p.order, difficulty: p.difficulty, skills: p.skills, stakeholder: p.stakeholder, brief: p.brief, steps: p.steps, decisions: p.decisions.map(({ id, title, step, ask }) => ({ id, title, step, ask })), defend: p.defend }
+  return { slug: p.slug, title: p.title, order: p.order, difficulty: p.difficulty, skills: p.skills, stakeholder: p.stakeholder, brief: p.brief, steps: p.steps, decisions: p.decisions.map(({ id, title, step, ask }) => ({ id, title, step, ask })), defend: p.defend, ...(p.fresh ? { fresh: true } : {}) }
 }
 
 // ---------- The session's rules ----------
@@ -262,7 +266,7 @@ export function revealDecision(p: WorkProject, s: WorkState, id: string, now = 0
   if (!d) return { state: s, error: `No decision ${id}.` }
   const c = s.committed[d.id]
   if (!c) return { state: s, error: `Not yet: ${d.id} is revealed only after the learner has committed to an answer of their own.` }
-  const text = [`${d.id}: ${d.title}`, `Their answer: ${c.answer}`, `What was actually decided: ${d.decided}`, d.why ? `Why: ${d.why}` : '', d.wrong.length ? `Common wrong choices:\n${d.wrong.map((w) => `- ${w}`).join('\n')}` : '', 'Compare their answer with this. A different choice can still be right if they defend it well: ask them to.'].filter(Boolean).join('\n')
+  const text = [`${d.id}: ${d.title}`, `Their answer: ${c.answer}`, p.fresh ? `What an experienced analyst would usually choose (a new task: nobody has decided this yet): ${d.decided}` : `What was actually decided: ${d.decided}`, d.why ? `Why: ${d.why}` : '', d.wrong.length ? `Common wrong choices:\n${d.wrong.map((w) => `- ${w}`).join('\n')}` : '', 'Compare their answer with this. A different choice can still be right if they defend it well: ask them to.', p.fresh ? 'If the right choice depends on how their company works, tell them to confirm it with whoever asked before they ship.' : ''].filter(Boolean).join('\n')
   return { state: s.revealed.includes(d.id) ? s : { ...s, revealed: [...s.revealed, d.id], updatedAt: now }, text, reveal: { id: d.id, decided: d.decided, why: d.why, wrong: d.wrong, answer: c.answer } }
 }
 
@@ -308,7 +312,7 @@ function findingsText(s: WorkState): string {
 }
 
 export function cardOf(p: WorkProject, s: WorkState | null): WorkCard {
-  return { slug: p.slug, title: p.title, order: p.order, difficulty: p.difficulty, steps: p.steps.length, decisions: p.decisions.length, answered: s ? p.decisions.filter((d) => s.committed[d.id]).length : 0, done: !!s && projectDone(p, s) }
+  return { slug: p.slug, title: p.title, order: p.order, difficulty: p.difficulty, steps: p.steps.length, decisions: p.decisions.length, answered: s ? p.decisions.filter((d) => s.committed[d.id]).length : 0, done: !!s && projectDone(p, s), ...(p.fresh ? { fresh: true } : {}) }
 }
 
 /** The summary note written at the end: their decisions in their words, beside what was decided */
@@ -329,15 +333,19 @@ export function summaryMarkdown(p: WorkProject, s: WorkState, text: string, at: 
 export const WORK_MARK = 'GUIDED WORK PROJECT'
 
 /** The rules for a work project session: in its instructions, never in the stable lesson prompt */
-export function workRules(title: string): string {
+export function workRules(title: string, fresh = false): string {
   return `${WORK_MARK}: ${title}. The learner is the analyst; the brief is a stakeholder's request. You tutor; you are never the author.
 - Start: call work_project (action progress) and read the brief and steps. Ask them how they would approach the brief before step 1.
 - They write every query and pipeline themselves, in files in their workspace. Never write their solution or a partial pipeline; give hints in words, from vague to specific.
 - Review what they wrote (read_file), run it on the practice data with practice_metabase (action pipeline) before you judge a number, and ask why for each choice (filters, grain, units, dates).
 - Decision points: when a step reaches one, call work_project ask_decision, put its question to them in your own words, and stop. No hints at the choice. When they reply, call commit_decision, then reveal_decision, and compare: what was decided and why, and the common wrong choices. A different choice can be right if they defend it.
 - After each step call work_project step_done. When all steps are done: the defend-it round, one question at a time, marking each answer; then work_project rubric to find gaps; then write_summary with a short summary in their words (what they built, decisions, what to revisit).
-- This is practice data: yours to break. Their company's data is never used here.`
+- This is practice data: yours to break. Their company's data is never used here.${fresh ? `
+- ${NEW_TASK_RULE}` : ''}`
 }
+
+/** A project drafted from a new request from their job (shared/workTask) */
+export const NEW_TASK_RULE = 'This is a new, real request from their job, not a redo of finished work: nobody has decided the decision points yet. What reveal_decision gives is the usual choice, not the answer; say so, and when a choice depends on how their company works, have them write down the question to confirm with whoever asked. They rehearse here on practice data, then do it for real at work; never ask for their company’s data, and never paste it here.'
 
 export const WORK_TOOL_LINE = 'work_project: the guided project (brief, steps, decision points asked before anything is revealed, the rubric at the end, the summary). practice_metabase: the practice Metabase and its MongoDB (yours to break): list collections and fields, run their pipelines, read or save their questions.'
 
@@ -357,6 +365,8 @@ export interface WorkApi extends FlightApi {
   view(slug: string): Promise<WorkView>
   answer(slug: string, id: string, answer: string): Promise<WorkView>
   prepare(slug: string): Promise<{ root: string; title: string; slug: string }>
+  /** Work through a new task: a request pasted from work, drafted into a guided project in Projects/Work (shared/workTask) */
+  fromRequest(req: import('./workTask').WorkTaskRequest): Promise<{ slug: string; title: string }>
 }
 
 /** A run of their step's pipeline on the practice data */

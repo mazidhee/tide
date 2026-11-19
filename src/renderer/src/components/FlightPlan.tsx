@@ -37,7 +37,7 @@ const ChartIcon = () => (
 
 // ---------- The route ----------
 
-function RouteMap({ title, route, big, selected, onStop, onProgress, onOverview, here }: { title: string; route: Route; big: boolean; selected: string; here: number; onStop(s: Stop): void; onProgress(): void; onOverview(): void }) {
+function RouteMap({ title, fresh = false, route, big, selected, onStop, onProgress, onOverview, here }: { title: string; fresh?: boolean; route: Route; big: boolean; selected: string; here: number; onStop(s: Stop): void; onProgress(): void; onOverview(): void }) {
   let stepIx = 0
   return (
     <div className={`fp-map ${big ? 'big' : 'small'}`}>
@@ -122,7 +122,7 @@ function RouteMap({ title, route, big, selected, onStop, onProgress, onOverview,
           <span className="fp-dot on" /> step done
         </span>
         <span>
-          <span className="fp-dia" /> checkpoint: commit before you see the real call
+          <span className="fp-dia" /> checkpoint: commit before you see {fresh ? 'the usual choice' : 'the real call'}
         </span>
         <span>Click any stop to zoom in</span>
       </div>
@@ -475,7 +475,7 @@ function StepWork({ v, n, onView, results, setResult, onCheckpoint, onStep }: { 
 
   return (
     <div className="fp-work">
-      {ws ? <FlightTutor slug={p.slug} title={p.title} step={n} stepTitle={st.title} root={ws.root} file={ws.file} terminalId={termId} onReady={setTutor} /> : <section className="fp-col" />}
+      {ws ? <FlightTutor slug={p.slug} title={p.title} fresh={!!p.fresh} step={n} stepTitle={st.title} root={ws.root} file={ws.file} terminalId={termId} onReady={setTutor} /> : <section className="fp-col" />}
       <section className="fp-col fp-mid">
         <div className="fp-task">
           <div className="fp-k">
@@ -594,7 +594,7 @@ function Checkpoint({ v, id, onView, results, onStep }: { v: WorkView; id: strin
     setBusy(true)
     try {
       onView(await window.tide.work.answer(v.project.slug, id, draft))
-      app.toast('Committed. Here’s what was decided.')
+      app.toast(v.project.fresh ? 'Committed. Here’s the usual choice.' : 'Committed. Here’s what was decided.')
     } catch (e) {
       app.toast(clean(e), { tone: 'error' })
     } finally {
@@ -618,7 +618,7 @@ function Checkpoint({ v, id, onView, results, onStep }: { v: WorkView; id: strin
               <button className="btn primary" disabled={busy || draft.trim().length < 2} onClick={() => void commit()}>
                 Commit my answer
               </button>
-              <span>You can’t change it after. Then you see what was actually decided.</span>
+              <span>{v.project.fresh ? 'You can’t change it after. Then you see the usual choice, to check with whoever asked.' : 'You can’t change it after. Then you see what was actually decided.'}</span>
             </div>
           </>
         ) : (
@@ -628,7 +628,7 @@ function Checkpoint({ v, id, onView, results, onStep }: { v: WorkView; id: strin
               <p>{mine.answer}</p>
             </div>
             <div>
-              <h5>What was decided</h5>
+              <h5>{v.project.fresh ? 'The usual choice' : 'What was decided'}</h5>
               {shown ? (
                 <>
                   <div className="fp-pick fp-md" dangerouslySetInnerHTML={{ __html: md(shown.decided) }} />
@@ -860,7 +860,7 @@ export function FlightPlan({ slug }: { slug: string }) {
 
   return (
     <div className="fp" data-mode={mode.kind}>
-      <RouteMap title={p.title} route={route} big={big} selected={selected} here={current} onStop={go} onProgress={() => setMode({ kind: 'progress' })} onOverview={() => setMode({ kind: 'overview' })} />
+      <RouteMap title={p.title} fresh={!!p.fresh} route={route} big={big} selected={selected} here={current} onStop={go} onProgress={() => setMode({ kind: 'progress' })} onOverview={() => setMode({ kind: 'overview' })} />
       <div className="fp-body">
         {mode.kind === 'overview' && (
           <div className="fp-ov">
@@ -870,6 +870,7 @@ export function FlightPlan({ slug }: { slug: string }) {
               </button>
               <div className="fp-brief">
                 {p.stakeholder && <div className="fp-from">From {p.stakeholder}</div>}
+                {p.fresh && <div className="fp-newtask">A new task from work. Nobody has decided its checkpoints yet: each shows the usual choice, to check with whoever asked.</div>}
                 <div className="fp-brief-text prose" dangerouslySetInnerHTML={{ __html: md(p.brief) }} />
               </div>
               <div className="fp-lede">

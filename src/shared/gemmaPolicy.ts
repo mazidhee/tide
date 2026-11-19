@@ -47,6 +47,8 @@ export const JOB_ROUTES = {
   projectDebrief: { label: 'A milestone’s debrief', role: 'hard' },
   projectIdeas: { label: 'Suggesting your next project', role: 'teach' },
   companyPrep: { label: 'Interview prep plan', role: 'teach' },
+  // Work through a new task (main/workTask): Opus turns a pasted work request into a guided work project
+  workTask: { label: 'Turning a work request into a guided project', role: 'hard' },
   readAlong: { label: 'Discussing a passage you’re reading', role: 'teach' },
   readTogether: { label: 'Reading a book together', role: 'teach' },
   // The reading room (main/readingRoom)
