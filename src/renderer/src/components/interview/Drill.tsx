@@ -604,8 +604,9 @@ function FirmDrill({ slug, bundle, spec, onSaved, onClose }: { slug: string; bun
     const fig = t.match(/(?:[$£€]\s?)?\d[\d,.]*\s?(?:%|bn|billion|m|million|k|years?)?/i)
     if (fig && fig[0].trim().length > 1) return t.replace(fig[0], '_____')
     const words = t.split(' ')
-    const k = words.reduce((best, w, j) => (w.length > words[best].length ? j : best), 0)
-    return words.map((w, j) => (j === k ? '_____' : w)).join(' ')
+    const bare = (w: string) => w.replace(/[^\p{L}\p{N}'-]/gu, '')
+    const k = words.reduce((best, w, j) => (bare(w).length > bare(words[best]).length ? j : best), 0)
+    return words.map((w, j) => (j === k ? w.replace(bare(w), '_____') : w)).join(' ')
   }
   const answer = async (knew: boolean) => {
     const r = right + (knew ? 1 : 0)
