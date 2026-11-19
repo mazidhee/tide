@@ -11,14 +11,16 @@ import { DesignPanel } from './DesignPanel'
 import { PixelScene } from './PixelScene'
 import { MockPanel } from './mock/MockPanel'
 import { SharpPanel } from './sharp/SharpPanel'
+import { AlgoPanel } from './AlgoPanel'
 
 const STATUS_LABEL: Record<PracticeStatus, string> = { todo: 'To do', solved: 'Solved', struggled: 'Struggled', redo: 'Try again' }
 const LANGUAGES = ['python', 'javascript', 'typescript', 'java', 'c++', 'go', 'rust']
 type Filter = 'all' | PracticeStatus
 
-type Tab = 'sharp' | 'coding' | 'problems' | 'workout' | 'quant' | 'design' | 'companies' | 'mock'
-const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' | 'subInterview' | 'gauge' }[] = [
+type Tab = 'sharp' | 'daily' | 'coding' | 'problems' | 'workout' | 'quant' | 'design' | 'companies' | 'mock'
+const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' | 'subInterview' | 'gauge' | 'subAlgorithms' }[] = [
   { id: 'sharp', label: 'Sharpness', icon: 'gauge' },
+  { id: 'daily', label: 'Daily problem', icon: 'subAlgorithms' },
   { id: 'coding', label: 'Coding', icon: 'sparkle' },
   { id: 'problems', label: 'Problems', icon: 'quiz' },
   { id: 'workout', label: 'Morning workout', icon: 'timer' },
@@ -165,7 +167,7 @@ export function PracticeView() {
 
   return (
     <div className="page practice">
-      <PixelScene key={tab} place={tab === 'coding' || tab === 'problems' ? 'terminal' : tab === 'quant' || tab === 'workout' ? 'math' : 'workshop'} rows={40} scale={3} className="page-scene" />
+      <PixelScene key={tab} place={tab === 'coding' || tab === 'problems' || tab === 'daily' ? 'terminal' : tab === 'quant' || tab === 'workout' ? 'math' : 'workshop'} rows={40} scale={3} className="page-scene" />
       <div className="page-inner">
         <header className="pv-head">
           <div>
@@ -278,6 +280,7 @@ export function PracticeView() {
         {tab === 'design' && <DesignPanel />}
         {tab === 'mock' && <MockPanel />}
         {tab === 'sharp' && <SharpPanel />}
+        {tab === 'daily' && <AlgoPanel />}
         {tab === 'companies' && (
           <section className="pv-prompt wide">
             <h2 className="pv-title">Prepare for a company</h2>
