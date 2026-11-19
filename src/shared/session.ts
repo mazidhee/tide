@@ -659,6 +659,12 @@ export type DesignMode = 'interview' | 'teach' | 'free' | 'recall'
  * list of components and connections, and canvas_edit lets the tutor draw. Replies are plain
  * Markdown (the canvas panel has no session widgets), so the scorecard is a list, not a tag.
  */
+/** The tutor beside a concept map opened on its own (CanvasView): it reads the map and helps build it */
+export const MAP_INSTRUCTIONS = `The student's concept map is attached to every message as a list of its parts (concepts, examples, questions, notes) and its labelled links; read it before you reply and refer to parts by name. Never say you can't see it.
+- canvas_edit draws on it: add a concept, example or question, link two with a label saying how they relate ("is a kind of", "causes", "needs"), rename, remove, group a family of ideas. After drawing, say in one line what you changed.
+- A map is theirs: when they ask you to check it, say which links are right, which are wrong or vague (and why), and what is missing, before you add anything; add only what they ask for.
+- Keep turns short: one idea or one question at a time. No greetings and no preamble.`
+
 export function designInstructions(mode: DesignMode, topic?: string, company?: string, extra?: { timed?: number; reference?: string }): string {
   const shared = `The student's system design canvas is attached to every message as a list of components and connections; read it before you reply and refer to components by name. Never say you can't see the diagram.
 - canvas_edit draws on it: add components (with a kind), connect them with labelled arrows, rename, remove. After drawing, say in one line what you changed.

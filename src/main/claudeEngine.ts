@@ -399,7 +399,7 @@ export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void>
  * Metabase, or is taught as the humanities. Fixed when its process starts, from the lesson's topic
  * and instructions, which stay the same through the lesson.
  */
-export async function sessionShape(req: Pick<TurnRequest, 'thread' | 'session' | 'topic' | 'instructions' | 'scope' | 'codeLesson'>, maths: boolean): Promise<import('@shared/tutorGuide').SessionShape> {
+export async function sessionShape(req: Pick<TurnRequest, 'thread' | 'session' | 'topic' | 'instructions' | 'scope' | 'codeLesson' | 'canvasPath'>, maths: boolean): Promise<import('@shared/tutorGuide').SessionShape> {
   const topic = req.topic ?? ''
   const { aboutSql } = await import('./lab')
   const { metabaseReady, connectorUsable } = await import('./metabase')
@@ -419,7 +419,7 @@ export async function sessionShape(req: Pick<TurnRequest, 'thread' | 'session' |
   const onMetabase = isMetabaseLesson(req.topic, path)
   // No key: the lesson reads their Metabase through their Claude connector when it answers
   const via = onMetabase ? (mb ? 'key' : (await connectorUsable()) ? 'connector' : undefined) : undefined
-  return { kind: 'lesson', maths, data, humanities, graphs: /language is graph/.test(said), metabase: via === 'key', ...(via === 'connector' ? { metabase: false, metabaseVia: 'connector' as const, data: true } : {}) }
+  return { kind: 'lesson', maths, data, humanities, graphs: /language is graph/.test(said), metabase: via === 'key', canvas: !!req.canvasPath, ...(via === 'connector' ? { metabase: false, metabaseVia: 'connector' as const, data: true } : {}) }
 }
 
 // ---------- A turn ----------
@@ -935,7 +935,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   if (exactSaid && !markNote) markNote = exactSaid
 
   // The lesson's Workspace terminal, for terminal_read (read only: main/terminal refuses to type into their own shell)
-  const toolCtx: ToolContext = { signal, sources: ctx.sources, emitSources: ctx.emitSources, step: ctx.step, updateStep: ctx.updateStep, web: false, chatId: req.chatId, labId: req.labId ?? req.chatId, terminalId: ctx.terminalId }
+  const toolCtx: ToolContext = { signal, sources: ctx.sources, emitSources: ctx.emitSources, step: ctx.step, updateStep: ctx.updateStep, web: false, chatId: req.chatId, labId: req.labId ?? req.chatId, terminalId: ctx.terminalId, canvasPath: ctx.canvasPath }
   bindLesson(proc.binding, toolCtx)
   // What set_exercise needs of this turn: the topic, the lesson so far and the mark, for the level (main/exercises)
   const { setLessonInfo } = await import('./exercises')

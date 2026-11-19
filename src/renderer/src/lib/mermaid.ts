@@ -4,6 +4,36 @@
  * as code until they parse, so a half-written diagram never flashes an error.
  */
 import { repairMermaid } from '@shared/mermaidRepair'
+import { parseMermaidFlow } from '@shared/mermaidFlow'
+import type { Root } from 'react-dom/client'
+
+// Flowcharts drawn on the canvas, taken down when their message leaves the page
+const figures = new Set<{ el: HTMLElement; root: Root }>()
+function sweep() {
+  for (const f of figures)
+    if (!f.el.isConnected) {
+      figures.delete(f)
+      f.root.unmount()
+    }
+}
+
+/**
+ * A flowchart this app can follow goes on the canvas instead of mermaid's picture: the same
+ * boxes and arrows, but you can pan, zoom and play a request along the arrows step by step.
+ * Returns false to leave the block to mermaid.
+ */
+async function renderFlow(pre: HTMLElement, code: string): Promise<boolean> {
+  const flow = parseMermaidFlow(code) ?? parseMermaidFlow(repairMermaid(code))
+  if (!flow || flow.nodes.length < 2 || !flow.links.length || flow.nodes.length > 80) return false
+  const [{ flowToCanvas }, { mountFlowFigure }] = await Promise.all([import('@shared/flowLayout'), import('../components/flow/FlowFigure')])
+  if (!pre.isConnected) return true
+  const figure = document.createElement('figure')
+  figure.className = 'flow-figure'
+  figure.setAttribute('aria-label', 'Flowchart. Play the flow to follow it step by step.')
+  pre.replaceWith(figure)
+  figures.add({ el: figure, root: mountFlowFigure(figure, flowToCanvas(flow)) })
+  return true
+}
 
 let mermaidPromise: Promise<typeof import('mermaid').default> | null = null
 let currentTheme = ''
@@ -33,6 +63,11 @@ async function renderBlock(pre: HTMLElement) {
   const code = pre.querySelector('code')?.textContent ?? ''
   if (!code.trim() || pre.dataset.mermaidTried === code) return
   pre.dataset.mermaidTried = code
+  try {
+    if (await renderFlow(pre, code)) return
+  } catch {
+    // Fall back to mermaid's own drawing
+  }
   const mermaid = await getMermaid()
   try {
     // As written, or mended (a fence opened twice, a mindmap with two roots)
@@ -55,6 +90,7 @@ async function renderBlock(pre: HTMLElement) {
 let timer: ReturnType<typeof setTimeout> | undefined
 
 function scan() {
+  sweep()
   document.querySelectorAll<HTMLElement>('pre.code-block[data-lang="mermaid"]').forEach((pre) => void renderBlock(pre))
 }
 

@@ -251,7 +251,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [approach, setApproach] = useState<Strategy | undefined>(taught)
   const approachRef = useRef(approach)
   approachRef.current = approach
-  // A walkthrough draws on a canvas kept with the topic
+  // Every lesson has a canvas kept with the topic: a walkthrough draws its system there, and you
+  // and the tutor draw diagrams and concept maps on it in any lesson
   const canvasPath = useMemo(() => lessonCanvasPath(scope, topic), [scope, topic])
   // A walkthrough with known steps: draw each as soon as the tutor reaches it (code, not the model)
   const [canvasRev, setCanvasRev] = useState(0)
@@ -408,7 +409,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       if (coding) await coding.flush()
       // [metabase] The Metabase page beside the lesson, as the tutor reads it
       const mbScreen = mbShownRef.current ? await window.tide.metabase.screen().catch(() => null) : null
-      await window.tide.ai.chat({ id, messages, scope, ...(mbScreen?.text ? { onScreen: mbScreen.text } : {}), instructions: sessionInstructions(setupRef.current), labId: labId.current, ...(termIdRef.current ? { terminalId: termIdRef.current } : {}), ...(coding ? { codeLesson: { file: coding.file ?? undefined, root: setupRef.current.options?.codeRoot } } : {}), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}), ...(setupRef.current.options?.workProject ? { workProject: setupRef.current.options.workProject.slug } : {}) })
+      await window.tide.ai.chat({ id, messages, scope, ...(mbScreen?.text ? { onScreen: mbScreen.text } : {}), instructions: sessionInstructions(setupRef.current), labId: labId.current, ...(termIdRef.current ? { terminalId: termIdRef.current } : {}), ...(coding ? { codeLesson: { file: coding.file ?? undefined, root: setupRef.current.options?.codeRoot } } : {}), canvasPath: setupRef.current.mode === 'teach' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}), ...(setupRef.current.options?.workProject ? { workProject: setupRef.current.options.workProject.slug } : {}) })
     },
     [scope, setup, web, timed, clock, mode, difficulty.noteFor]
   )
@@ -834,7 +835,18 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     window.tide.books.suggest(topic, 2, 'path' in scope ? scope.path : '').then(setToRead).catch(() => {})
   }, [mode, topic, JSON.stringify(scope)])
   const notesMine = useRef('')
-  const [sideTab, setSideTab] = useState<'canvas' | 'notes'>('canvas')
+  const [sideTab, setSideTab] = useState<'canvas' | 'notes'>(() => (approach === 'walkthrough' ? 'canvas' : 'notes'))
+  // When the tutor draws, show the canvas it is drawing on
+  useEffect(() => {
+    if (mode !== 'teach') return
+    return window.tide.ai.onEvent((e) => {
+      if (e.type !== 'step' || e.step.kind !== 'canvas' || e.step.status !== 'running' || !e.id.startsWith('session:')) return
+      setSideTab('canvas')
+      setNotesOpen(true)
+      setWorkFull(false)
+      setWork((w) => (w.tab === 'work' ? { ...w, tab: 'notes' } : w))
+    })
+  }, [mode])
   useEffect(() => {
     const flow = options?.flow
     if (!flow?.length || busy) return
@@ -1488,7 +1500,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const changeApproach = (to: Strategy, said?: string) => {
     setApproach(to)
     approachRef.current = to
-    if (to === 'walkthrough') setNotesOpen(true)
+    if (to === 'walkthrough') {
+      setNotesOpen(true)
+      setSideTab('canvas')
+    }
     send(`${said ? `${said}\n\n` : ''}(From here on, teach this way: ${STRATEGY_RULES[to] || 'problem sets, one problem at a time, stepping difficulty up and down as before.'})`, turns)
   }
 
@@ -2995,8 +3010,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       ) : (withNotes || showWork) && (
         <div className="lesson-side">
           <SideTabs
-            tabs={[...(approach === 'walkthrough' ? [{ id: 'canvas', label: 'Canvas' }] : []), { id: 'notes', label: 'Notes' }, ...(workOn || workOffered ? [{ id: 'work', label: work.open ? `${work.open} + Terminal` : 'Workspace' }] : [])]}
-            tab={showWork ? 'work' : approach === 'walkthrough' && sideTab === 'canvas' ? 'canvas' : 'notes'}
+            tabs={[{ id: 'canvas', label: 'Canvas' }, { id: 'notes', label: 'Notes' }, ...(workOn || workOffered ? [{ id: 'work', label: work.open ? `${work.open} + Terminal` : 'Workspace' }] : [])]}
+            tab={showWork ? 'work' : sideTab}
             onTab={(t) => {
               if (t === 'work') return workOn ? setWork((w) => ({ ...w, tab: 'work' })) : void openWorkspace()
               setWorkFull(false)
@@ -3005,7 +3020,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               setNotesOpen(true)
             }}
           />
-          {!showWork && approach === 'walkthrough' && sideTab === 'canvas' ? (
+          {!showWork && sideTab === 'canvas' ? (
             <Suspense fallback={<div className="view-loading" aria-busy="true" />}>
               <LessonCanvas path={canvasPath} lessonId="session:" revision={canvasRev} />
             </Suspense>
