@@ -205,7 +205,7 @@ export function InterviewTarget({ slug, drill, mode: wantMode }: { slug: string;
     app.setView({ kind: 'session', mode: 'teach', scope: path ? { kind: 'note', path } : { kind: 'folder', path: meta.folder }, topic, nonce: Date.now() })
   const liveMock = (round: string) =>
     // Slot for the live voice mock (built separately: shared/interviewMock, components/interview/LiveMock*)
-    app.setView({ kind: 'interview-mock', slug, round } as unknown as View)
+    app.setView({ kind: 'interview-mock', slug, round })
 
   const saved = (p: Progress) => setB((cur) => (cur ? { ...cur, progress: p } : cur))
 

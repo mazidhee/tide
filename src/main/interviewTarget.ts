@@ -257,7 +257,14 @@ export async function createTarget(t: NewTarget): Promise<{ slug: string; folder
 export async function saveAttempt(slug: string, a: Attempt): Promise<Progress> {
   const p = await readProgress(slug)
   p.attempts.push({ ...a, at: a.at || Date.now() })
-  await writeText(progressPath(slug), JSON.stringify(p, null, 1))
+  // The file also holds what other features keep there (the live mocks' `mocks[]`): kept as it was
+  let raw: Record<string, unknown> = {}
+  try {
+    raw = JSON.parse(await readText(progressPath(slug))) as Record<string, unknown>
+  } catch {
+    raw = {}
+  }
+  await writeText(progressPath(slug), JSON.stringify({ ...raw, ...p }, null, 1))
   return p
 }
 

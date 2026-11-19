@@ -354,6 +354,11 @@ async function saveAttempt(slug: string, a: MockAttempt): Promise<void> {
   const p = await readProgress(slug)
   const mocks = Array.isArray(p.mocks) ? (p.mocks as MockAttempt[]) : []
   p.mocks = [...mocks.filter((m) => m.id !== a.id), a]
+  // A mock also counts toward the target's readiness, as one attempt in the area its round tests
+  const area = a.kind === 'technical' ? 'scenarios' : a.kind === 'presentation' ? 'presentation' : 'behavioural'
+  const drill = area === 'scenarios' ? 'scenario' : area === 'presentation' ? 'talk' : 'behavioural'
+  const attempts = Array.isArray(p.attempts) ? (p.attempts as { item: string }[]) : []
+  p.attempts = [...attempts.filter((x) => x.item !== `mock:${a.id}`), { item: `mock:${a.id}`, area, drill, at: Date.now(), score: Math.max(0, Math.min(1, a.overall / 4)), marks: {}, by: 'claude' }]
   const file = absPath(progressFile(slug))
   await fs.mkdir(join(file, '..'), { recursive: true })
   const tmp = `${file}.tmp`
