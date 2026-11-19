@@ -10984,8 +10984,8 @@ code.cmd-chip:hover {
 }
 
 .pv-tabs {
-  overflow-y: hidden;
-  scrollbar-width: none;
+  flex-wrap: wrap;
+  overflow: visible;
 }
 
 .pv-tabs::-webkit-scrollbar {

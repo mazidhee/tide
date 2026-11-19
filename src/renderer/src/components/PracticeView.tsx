@@ -20,6 +20,7 @@ type Filter = 'all' | PracticeStatus
 
 type Tab = 'sharp' | 'daily' | 'coding' | 'problems' | 'workout' | 'quant' | 'design' | 'companies' | 'mock' | 'interview'
 const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' | 'subInterview' | 'gauge' | 'subAlgorithms' | 'subCareer' }[] = [
+  { id: 'interview', label: 'Interview prep', icon: 'subCareer' },
   { id: 'sharp', label: 'Sharpness', icon: 'gauge' },
   { id: 'daily', label: 'Daily problem', icon: 'subAlgorithms' },
   { id: 'coding', label: 'Coding', icon: 'sparkle' },
@@ -28,8 +29,7 @@ const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'ca
   { id: 'quant', label: 'Quant', icon: 'summary' },
   { id: 'design', label: 'System design', icon: 'canvas' },
   { id: 'companies', label: 'Companies', icon: 'globe' },
-  { id: 'mock', label: 'Mock', icon: 'subInterview' },
-  { id: 'interview', label: 'Interview prep', icon: 'subCareer' }
+  { id: 'mock', label: 'Mock', icon: 'subInterview' }
 ]
 
 const ago = (t: number) => {
