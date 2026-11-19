@@ -87,6 +87,7 @@ const EXPECTED: Record<string, string | null> = {
   writingTalk: 'teach',
   writingDraft: 'teach',
   comprehensionGrade: 'mark',
+  comprehensionMap: 'mark',
   dailyMark: 'mark',
   tieBreak: 'background',
   examPaper: 'teach',

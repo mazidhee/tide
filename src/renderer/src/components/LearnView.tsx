@@ -10,6 +10,8 @@ import { startPrepared, useReadyLesson } from '../lib/prep'
 import { PixelProf } from './learn/PixelProf'
 import { WAY_ART, type WayId } from './learn/WayArt'
 import { LearnShelf, LEVEL_LABEL } from './learn/LearnShelf'
+import { WEB_SITES, type WebSite } from '@shared/compWeb'
+import { lastSite, rememberSite, SITE_SHORT } from './comprehension/sites'
 import '../styles/comprehension.css'
 import '../styles/learn.css'
 
@@ -23,7 +25,7 @@ const WAYS: { id: WayId & LearnMode; name: string; start: string; pose: Professo
   { id: 'quiz', name: 'Quiz', start: 'Start the quiz', pose: 'cards', say: 'Pick a card. Any card.', desc: 'Questions on one topic. Anything you miss becomes a flashcard.' },
   { id: 'mixed', name: 'Mixed', start: 'Start mixed practice', pose: 'chess', say: 'Binary, then gates, then back again.', desc: 'Questions that switch topic every time. Harder, and the strongest way to practise.' },
   { id: 'exam', name: 'Exam', start: 'Start the exam', pose: 'stopwatch', say: '45 minutes. Begin.', desc: 'A timed paper, marked at the end. Type your answers or photograph your working.' },
-  { id: 'comprehension', name: 'Comprehension', start: 'Start reading', pose: 'book', say: 'Read it once, then tell me.', desc: 'Read a passage, put it away, then say what it says. Checked against its exact words.' },
+  { id: 'comprehension', name: 'Comprehension', start: 'Start reading', pose: 'book', say: 'Read it once, then tell me.', desc: 'Read a passage from your book, Wikipedia, Gutenberg or arXiv, put it away, then say what it says and map its argument.' },
   { id: 'review', name: 'Review my writing', start: 'Start the review', pose: 'writing', say: 'Nice line. One comma, though.', desc: 'Comments on something you wrote, pinned to your words. It never rewrites it.' },
   { id: 'interview', name: 'Interview', start: 'Start the interview', pose: 'laptop', say: 'Walk me through your approach.', desc: 'A coding problem, your code run against tests, follow-up questions and a scorecard.' }
 ]
@@ -89,6 +91,20 @@ export function LearnView() {
   const [focused, setFocused] = useState(false)
   // The card the pointer or keyboard is on: only its tutor moves
   const [live, setLive] = useState<string | null>(null)
+  // Comprehension: the book being read, or a fresh text from the web on a topic
+  const [compFrom, setCompFrom] = useState<'book' | WebSite>(() => (localStorage.getItem('tide.comp.from') === 'web' ? lastSite() : 'book'))
+  const [compTopic, setCompTopic] = useState('')
+  useEffect(() => {
+    if (mode !== 'comprehension' || compTopic) return
+    let live = true
+    window.tide.comprehension
+      .webTopic()
+      .then((t) => live && t.topic && setCompTopic((x) => x || t.topic!))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [mode, compTopic])
 
   useEffect(() => {
     window.tide.vault.notes().then(setNotes)
@@ -160,7 +176,12 @@ export function LearnView() {
       return
     }
     if (m === 'comprehension') {
-      app.setView({ kind: 'comprehension' })
+      localStorage.setItem('tide.comp.from', compFrom === 'book' ? 'book' : 'web')
+      if (compFrom === 'book') app.setView({ kind: 'comprehension' })
+      else {
+        rememberSite(compFrom)
+        app.setView({ kind: 'comprehension', fresh: { site: compFrom, topic: compTopic.trim(), nonce: Date.now() } })
+      }
       return
     }
     if (m === 'exam') {
@@ -198,7 +219,7 @@ export function LearnView() {
 
   const needsNote = mode === 'review' && source.kind !== 'note'
   const way = WAYS.find((w) => w.id === mode)!
-  const canStart = mode === 'comprehension' ? true : mode === 'mixed' ? typedMix.length > 0 || mixTopics.length > 0 : !needsNote && (!!topic.trim() || source.kind !== 'none')
+  const canStart = mode === 'comprehension' ? compFrom === 'book' || !!compTopic.trim() : mode === 'mixed' ? typedMix.length > 0 || mixTopics.length > 0 : !needsNote && (!!topic.trim() || source.kind !== 'none')
 
   const counts = ready ? readyCounts(ready) : []
   const countLine = counts.map((c) => (c.n !== undefined ? `${c.n} ${c.label}` : `a ${c.label.toLowerCase()}`)).join(' · ')
@@ -312,9 +333,39 @@ export function LearnView() {
 
         <section className="lrn-sheet" aria-label={`${way.name}: settings`}>
           {mode === 'comprehension' ? (
-            <Row label="From">
-              <span className="lrn-plain">The next passage of the book you’re reading, or one you select in the reader</span>
-            </Row>
+            <>
+              <Row label="From">
+                <Seg<'book' | WebSite>
+                  label="From"
+                  value={compFrom}
+                  options={[{ value: 'book', label: 'Your book' }, ...(['wikipedia', 'gutenberg', 'arxiv'] as const).map((s) => ({ value: s, label: SITE_SHORT[s] }))]}
+                  onChange={setCompFrom}
+                />
+              </Row>
+              {compFrom === 'book' ? (
+                <Row label="Passage">
+                  <span className="lrn-plain">The next passage of the book you’re reading, or one you select in the reader</span>
+                </Row>
+              ) : (
+                <Row label="Topic">
+                  <label className="lrn-field">
+                    <Icon name="search" size={15} />
+                    <input
+                      value={compTopic}
+                      onChange={(e) => setCompTopic(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing && canStart) start()
+                      }}
+                      placeholder="What to read about"
+                      aria-label="Topic to read about"
+                    />
+                  </label>
+                  <span className="lrn-plain lrn-comp-source">
+                    {WEB_SITES[compFrom].what.replace(/^./, (c) => c.toUpperCase())}, quoted exactly and credited ({WEB_SITES[compFrom].licence.replace(' (arXiv’s metadata)', '')})
+                  </span>
+                </Row>
+              )}
+            </>
           ) : mode === 'mixed' ? (
             <Row label="Topics">
               {mixList === null ? (

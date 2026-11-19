@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { clock, countWords, resultLine, SELF_RUBRIC, sentenceAround, sentenceCount, STEP_LABEL, toggleMark, type CompLesson, type CompStep, type HardMark, type SummaryPoint } from '@shared/comprehension'
+import { clock, countWords, mapLine, resultLine, SELF_RUBRIC, sentenceAround, sentenceCount, STEP_LABEL, toggleMark, type CompLesson, type CompStep, type HardMark, type SummaryPoint } from '@shared/comprehension'
 import { stackMargin } from '@shared/writing'
 import { useApp } from '../../state'
 import { Icon } from '../Icon'
 import { readerPrefs } from '../../lib/readingRoom'
 import { Passage, selectionIn, type Range } from './Passage'
+import { Credit } from './Credit'
+import { MapStep } from './MapStep'
 import '../../styles/writing.css'
 import '../../styles/comprehension.css'
 
@@ -12,13 +14,14 @@ import '../../styles/comprehension.css'
  * One comprehension lesson (shared/comprehension, main/comprehension). The passage is the hero,
  * in the reader's face. Read it once, timed, marking what's hard; it's put away while you say
  * what it says; then it comes back with what you caught, missed or got wrong beside its exact
- * words, in the writing review's margin cards. The hard words become cards in Review.
+ * words, in the writing review's margin cards; then you map how it argues (MapStep). The hard
+ * words become cards in Review. A passage from the web is credited wherever it is shown.
  */
 
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 const NARROW = 920
 /** The steps the learner sees in the bar */
-const SHOWN: CompStep[] = ['read', 'summary', 'review', 'words']
+const SHOWN: CompStep[] = ['read', 'summary', 'review', 'map', 'words']
 const VERDICT: Record<SummaryPoint['verdict'], string> = { caught: 'Caught', missed: 'Missed', wrong: 'Not what it says' }
 const uid = () => Math.random().toString(36).slice(2, 9)
 
@@ -94,6 +97,7 @@ export function ComprehensionLesson({ id }: { id: string }) {
       {step === 'read' && <ReadStep lesson={lesson} update={update} />}
       {step === 'summary' && <SummaryStep lesson={lesson} update={update} setLesson={setLesson} />}
       {step === 'review' && <ReviewStep lesson={lesson} update={update} setLesson={setLesson} />}
+      {step === 'map' && <MapStep lesson={lesson} update={update} setLesson={setLesson} />}
       {step === 'words' && <WordsStep lesson={lesson} setLesson={setLesson} />}
       {step === 'done' && <DoneStep lesson={lesson} />}
     </div>
@@ -164,10 +168,12 @@ function ReadStep({ lesson, update }: { lesson: CompLesson; update: Update }) {
       <div className="cp-body">
         <div className="cp-col">
           <div className="cp-start">
+            {lesson.note && <p className="cp-note">{lesson.note}</p>}
             <p className="cp-start-what">
               {lesson.words.toLocaleString('en-GB')} words from <i>{lesson.source.work}</i>
               {lesson.source.author ? `, ${lesson.source.author}` : ''}
             </p>
+            {lesson.source.web && <Credit web={lesson.source.web} className="center" />}
             <p className="cp-start-how">Read it once at your own pace. Select anything you find hard to mark it. Then it’s put away and you say what it says.</p>
             <button className="btn primary" onClick={() => setPhase('reading')}>
               Start reading
@@ -209,6 +215,7 @@ function ReadStep({ lesson, update }: { lesson: CompLesson; update: Update }) {
             )}
           </div>
         )}
+        {lesson.source.web && <Credit web={lesson.source.web} />}
         <div className="cp-after">
           {phase === 'reading' ? (
             <>
@@ -345,7 +352,7 @@ function ReviewStep({ lesson, update, setLesson }: { lesson: CompLesson; update:
     }
   }
 
-  const goOn = () => void update({ step: lesson.marks.length ? 'words' : 'done' })
+  const goOn = () => void update({ step: 'map' })
 
   const summary = (
     <div className="cp-said">
@@ -366,6 +373,7 @@ function ReviewStep({ lesson, update, setLesson }: { lesson: CompLesson; update:
         {selfCheck && <p className="cp-result-line">Read it again and check what you wrote against it.</p>}
         {(narrow || !selfCheck) && summary}
         <Passage ref={passageRef} text={lesson.passage} ranges={ranges} lit={lit} onRangeHover={setHover} onRangeClick={(ids) => setActive(ids.find((x) => x.startsWith('p')) ?? null)} />
+        {lesson.source.web && <Credit web={lesson.source.web} />}
         {narrow && !selfCheck && (
           <div className="cp-cards-list">
             {points.map((p) => (
@@ -382,7 +390,7 @@ function ReviewStep({ lesson, update, setLesson }: { lesson: CompLesson; update:
             </button>
           ) : (
             <button className="btn primary" onClick={goOn}>
-              {lesson.marks.length ? 'Next: your hard words' : 'Finish'}
+              Next: map the argument
             </button>
           )}
         </div>
@@ -562,6 +570,12 @@ function DoneStep({ lesson }: { lesson: CompLesson }) {
               <dd>{resultLine(lesson)}</dd>
             </div>
           )}
+          {lesson.map?.by && (
+            <div>
+              <dt>Your map</dt>
+              <dd>{mapLine(lesson.map)}</dd>
+            </div>
+          )}
           {read && (
             <div>
               <dt>Your read</dt>
@@ -583,7 +597,7 @@ function DoneStep({ lesson }: { lesson: CompLesson }) {
             </button>
           )}
           <button className="btn ghost" onClick={() => app.setView({ kind: 'comprehension' })}>
-            Back to Comprehension
+            {lesson.source.web ? 'Another fresh text' : 'Back to Comprehension'}
           </button>
           {lesson.source.path && (
             <button className="btn ghost" onClick={() => app.openPath(lesson.source.path)}>

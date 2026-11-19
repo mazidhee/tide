@@ -65,6 +65,7 @@ const JOB_EFFORT: Record<JobName, Effort> = {
   writingTalk: 'medium',
   writingDraft: 'low',
   comprehensionGrade: 'high',
+  comprehensionMap: 'high',
   dailyMark: 'low',
   tieBreak: 'low',
   examPaper: 'medium',

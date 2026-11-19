@@ -626,7 +626,7 @@ function registerIpc() {
   handle('comp:next', async () => (await import('./comprehension')).nextPassage())
   handle('comp:list', async () => (await import('./comprehension')).listLessons())
   handle('comp:get', async (id: string) => (await import('./comprehension')).getLesson(String(id ?? '')))
-  handle('comp:start', async (o: import('./comprehension').StartFrom) => (await import('./comprehension')).startLesson(o?.from === 'selection' ? o : { from: 'book' }))
+  handle('comp:start', async (o: import('./comprehension').StartFrom) => (await import('./comprehension')).startLesson(o?.from === 'selection' || o?.from === 'web' ? o : { from: 'book' }))
   handle('comp:update', async (id: string, patch: import('./comprehension').LessonPatch) => (await import('./comprehension')).updateLesson(String(id ?? ''), patch && typeof patch === 'object' ? patch : {}))
   handle('comp:canGrade', async () => (await import('./comprehension')).canGrade())
   handle('comp:grade', async (id: string) => (await import('./comprehension')).gradeSummary(String(id ?? '')))
@@ -634,6 +634,9 @@ function registerIpc() {
   handle('comp:cards', async (id: string, keep: import('@shared/comprehension').HardMark[]) => (await import('./comprehension')).makeCards(String(id ?? ''), Array.isArray(keep) ? keep : []))
   handle('comp:inBook', async (o: Parameters<typeof import('./comprehension').startInBook>[0]) => (await import('./comprehension')).startInBook(o && typeof o === 'object' ? o : ({} as never)))
   handle('comp:bookChecks', async (path: string) => (await import('./comprehension')).bookChecks(String(path ?? '')))
+  handle('comp:webTopic', async () => (await import('./comprehension')).webTopic())
+  handle('comp:map', async (id: string, map: import('@shared/comprehension').ArgMap) => (await import('./comprehension')).compareMap(String(id ?? ''), map))
+  handle('comp:mapSelf', async (id: string, map: import('@shared/comprehension').ArgMap, ticks: Record<string, boolean>) => (await import('./comprehension')).mapSelfCheck(String(id ?? ''), map, ticks && typeof ticks === 'object' ? ticks : {}))
   handle('comp:lookup',(word: string) => shell.openExternal(`dict://${encodeURIComponent(String(word ?? '').slice(0, 80))}`))
   handle('writing:addFolder', async () => {
     const res = await dialog.showOpenDialog(win!, { title: 'Add a writing folder', buttonLabel: 'Add folder', properties: ['openDirectory'] })
