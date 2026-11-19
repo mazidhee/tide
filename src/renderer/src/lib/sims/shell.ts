@@ -5,11 +5,14 @@
  * It also owns the clock. Steps run inside requestAnimationFrame with a time budget, and stop
  * when the figure is off screen, the window is hidden, or the model is working (the GPU is
  * shared with it). Reduced motion starts paused; steps then happen only when asked for.
+ *
+ * A tour can be narrated: the professor's voice says each step as the simulation does it (narrate.ts).
  */
 import { readPalette, type Palette } from './colour'
 import { button, h, num, selectField } from './dom'
 import { ASK_EVENT, askDetail, askQuestion, dispatchAsk, type PartInfo } from './parts'
 import type { SimSpec, TourAction, TourStep } from './spec'
+import { canNarrate, createNarrator, type Narrator } from './narrate'
 
 export interface SimView {
   el: HTMLElement
@@ -94,6 +97,8 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
   let selected: string | null = null
   let peeked: string | null = null
   let note = ''
+  /** Held still while a narration is paused */
+  let held = false
 
   const host: SimHost = {
     root,
@@ -120,8 +125,14 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
   let tourAt = 0
   const tourCount = h('span', { class: 'sim-tour-count' })
   const tourSay = h('p', { class: 'sim-tour-say', 'aria-live': 'polite' })
-  const back = button('Back', () => goTo(tourAt - 1), 'quiet')
-  const next = button('Next', () => goTo(tourAt + 1))
+  const back = button('Back', () => moveTo(tourAt - 1), 'quiet')
+  const next = button('Next', () => moveTo(tourAt + 1))
+  /** The learner moving the tour: a narration goes on from there */
+  function moveTo(index: number): void {
+    const was = tourAt
+    goTo(index)
+    if (tourAt !== was) narrator?.moved(tourAt)
+  }
   function goTo(index: number): void {
     if (index < 0 || index >= tour.length) return
     const forward = index > tourAt || index === 0
@@ -150,9 +161,43 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
     }
     host.invalidate()
   }
+  // ---------- Narration ----------
+  let narrator: Narrator | null = null
+  const narrateRow = h('div', { class: 'sim-narrate' })
+  if (tour.length && canNarrate()) {
+    const narrateBtn = button('Narrate', () => narrator?.toggle(), 'quiet sim-narrate-btn')
+    narrateBtn.title = 'The professor talks you through it as it runs'
+    const narrateStop = button('Stop', () => narrator?.stop(), 'quiet sim-narrate-stop')
+    narrateStop.hidden = true
+    const narrateNote = h('span', { class: 'sim-narrate-note', 'aria-live': 'polite' })
+    narrateRow.append(narrateBtn, narrateStop, narrateNote)
+    narrator = createNarrator({
+      says: tour.map((t) => t.say),
+      restart: () => {
+        reset()
+        tourAt = 0
+        goTo(0)
+      },
+      goTo: (i) => goTo(i),
+      caughtUp: () => queued === 0 || !!view.done?.(),
+      hold: (on) => {
+        held = on
+        last = 0
+        owed = 0
+        if (!on) schedule()
+      },
+      show: (state, label, why) => {
+        narrateBtn.textContent = state === 'idle' ? 'Narrate' : state === 'preparing' ? 'Cancel' : state === 'paused' ? 'Resume' : 'Pause'
+        narrateBtn.setAttribute('aria-pressed', state === 'playing' ? 'true' : 'false')
+        narrateStop.hidden = state === 'idle' || state === 'preparing'
+        narrateNote.textContent = [label, why].filter(Boolean).join(' · ')
+        root.dataset.narrating = state
+      }
+    })
+  }
   // One caption needs no step count or buttons
-  if (tour.length === 1) root.append(h('div', { class: 'sim-tour single' }, tourSay))
-  else if (tour.length) root.append(h('div', { class: 'sim-tour' }, tourCount, tourSay, h('div', { class: 'sim-tour-nav' }, back, next)))
+  if (tour.length === 1) root.append(h('div', { class: 'sim-tour single' }, tourSay, narrator && narrateRow))
+  else if (tour.length) root.append(h('div', { class: 'sim-tour' }, tourCount, tourSay, h('div', { class: 'sim-tour-nav' }, back, next), narrator && narrateRow))
 
   body.append(view.el)
   root.append(body)
@@ -278,7 +323,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
 
   function frame(now: number): void {
     raf = 0
-    if (dead || !visible || document.hidden) return
+    if (dead || !visible || document.hidden || held) return
     let want = 0
     if (!busy()) {
       if (queued > 0) want = queued
@@ -312,7 +357,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
     const target = e.target as HTMLElement
     const field = target.closest('input, select, textarea')
     if (tour.length && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !field && !target.closest('[data-arrows]')) {
-      goTo(tourAt + (e.key === 'ArrowRight' ? 1 : -1))
+      moveTo(tourAt + (e.key === 'ArrowRight' ? 1 : -1))
       e.preventDefault()
       return
     }
@@ -375,6 +420,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
     destroy() {
       if (dead) return
       dead = true
+      narrator?.destroy()
       cancelAnimationFrame(raf)
       clearTimeout(flashTimer)
       seen.disconnect()

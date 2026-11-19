@@ -98,28 +98,65 @@ export async function autoplay(id: string, since: number): Promise<boolean> {
 
 /** Plays a reply from its first piece, waiting for each piece as it's made */
 export async function play(id: string, from = 0) {
+  await playRange(id, from)
+}
+
+/**
+ * Plays pieces [from, to) of a reply or narration, waiting for each as it's made and holding
+ * while paused. Resolves true when it played through, false when something stopped it.
+ */
+export async function playRange(id: string, from = 0, to = Infinity): Promise<boolean> {
   stop()
   const mine = ++run
   set({ playing: { id, piece: from, paused: false } })
-  for (let i = from; ; i++) {
+  for (let i = from; i < to; i++) {
     let st = view.states[id]
-    while (mine === run && (!st || st.phase === 'script' || (st.pieces[i] && !st.pieces[i].ready && !st.pieces[i].failed))) {
+    while (mine === run && (view.playing?.paused || !st || st.phase === 'script' || (st.pieces[i] && !st.pieces[i].ready && !st.pieces[i].failed))) {
       await new Promise<void>((r) => ((waker = r), setTimeout(r, 1500)))
       st = view.states[id]
     }
-    if (mine !== run) return
+    if (mine !== run) return false
     const piece = st.pieces[i]
     if (!piece) break
     if (piece.failed) continue
     const wav = await window.tide.lecture.piece(id, i)
-    if (mine !== run) return
+    if (mine !== run) return false
     if (!wav) continue
-    set({ playing: { id, piece: i, paused: false } })
+    set({ playing: { id, piece: i, paused: !!view.playing?.paused } })
     await playWav(wav, mine)
-    if (mine !== run) return
+    if (mine !== run) return false
   }
-  if (mine === run) set({ playing: null })
+  if (mine !== run) return false
+  set({ playing: null })
+  return true
 }
+
+/** A simulation's tour, made in the professor's voice (from the cache when it was made before) */
+export async function narrate(says: string[], kokoroVoice = 'bm_george'): Promise<LectureState> {
+  subscribeMain()
+  const st = await window.tide.lecture.narrate({ says, kokoroVoice })
+  set({ states: { ...view.states, [st.id]: view.states[st.id]?.pieces.some((p) => p.ready) ? view.states[st.id] : st } })
+  return st
+}
+
+/** Waits until a narration can start and play through without a gap (or the longest wait); false if stopped meanwhile */
+export async function whenReady(id: string, since: number, stillWanted: () => boolean): Promise<boolean> {
+  for (;;) {
+    if (!stillWanted()) return false
+    const st = view.states[id]
+    if (st && readyToStart(st.pieces, Date.now() - since)) return true
+    await new Promise<void>((r) => ((waker = r), setTimeout(r, 700)))
+  }
+}
+
+/** Outside React (a simulation's frame): told whenever anything changes */
+export function subscribe(l: () => void): () => void {
+  subscribeMain()
+  listeners.add(l)
+  return () => listeners.delete(l)
+}
+
+export const current = () => view
 
 function playWav(wav: Uint8Array, mine: number): Promise<void> {
   return new Promise((resolve) => {
@@ -136,21 +173,23 @@ function playWav(wav: Uint8Array, mine: number): Promise<void> {
     a.onended = done
     a.onerror = done
     ;(a as HTMLAudioElement & { _stop?: () => void })._stop = done
-    a.play().catch(done)
+    if (view.playing?.paused) a.pause()
+    else a.play().catch(done)
     if (mine !== run) (a.pause(), done())
   })
 }
 
 export function pause() {
-  if (!audio || !view.playing) return
-  audio.pause()
+  if (!view.playing) return
+  audio?.pause()
   set({ playing: { ...view.playing, paused: true } })
 }
 
 export function resume() {
-  if (!audio || !view.playing) return
-  void audio.play()
+  if (!view.playing) return
+  void audio?.play()
   set({ playing: { ...view.playing, paused: false } })
+  wake()
 }
 
 /** Silences it at once */

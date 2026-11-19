@@ -103,6 +103,45 @@ figure.sim p {
   grid-area: auto;
 }
 
+/* Narration: the professor says each step as the simulation does it */
+.sim-narrate {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.sim-narrate-btn::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 7px;
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent currentColor;
+  vertical-align: 0;
+}
+
+.sim[data-narrating='playing'] .sim-narrate-btn::before {
+  width: 8px;
+  height: 10px;
+  border-width: 0 3px;
+  border-color: currentColor;
+  box-sizing: border-box;
+}
+
+.sim[data-narrating='preparing'] .sim-narrate-btn::before {
+  display: none;
+}
+
+.sim-narrate-note {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Body ---------- */
 
 .sim-body {
