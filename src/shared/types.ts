@@ -723,6 +723,7 @@ export interface TideApi {
   ideas: import('./ideaProject').IdeasApi
   practiceData: import('./practiceStack').PracticeApi
   work: import('./workProject').WorkApi
+  interviewMock: import('./interviewMock').InterviewMockApi
   packs: import('./trackPacks').PacksApi
   /** Jupyter notebooks and the quant lab (shared/notebook) */
   notebook: import('./notebook/api').NotebookApi

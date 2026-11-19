@@ -67,6 +67,7 @@ import { registerSharpness } from './sharpness'
 import { registerIdeas } from './ideaProjects'
 import { registerPractice } from './practiceStack'
 import { registerWork } from './workProjects'
+import { registerInterviewMock } from './interviewMock'
 import { registerPacks, stopPacks } from './packs'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
@@ -245,6 +246,7 @@ function registerIpc() {
   registerIdeas()
   registerPractice()
   registerWork()
+  registerInterviewMock()
   registerPacks()
   registerBackups(handle)
   registerBugReports()

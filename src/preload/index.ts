@@ -5,6 +5,7 @@ import { ideasApi } from './ideas'
 import { notebookApi } from './notebook'
 import { packsApi } from './packs'
 import { practiceApi, workApi } from './practice'
+import { interviewMockApi } from './interviewMock'
 
 const invoke =
   <R>(channel: string) =>
@@ -66,6 +67,7 @@ const api: TideApi = {
   ideas: ideasApi,
   practiceData: practiceApi,
   work: workApi,
+  interviewMock: interviewMockApi,
   packs: packsApi,
   notebook: notebookApi,
   lsp: {

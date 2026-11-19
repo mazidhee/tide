@@ -87,6 +87,7 @@ const JupyterView = lazy(() => import('./components/notebook/JupyterView').then(
 const GraphView = lazy(() => import('./components/GraphView').then((m) => ({ default: m.GraphView })))
 const DrillView = lazy(() => import('./components/DrillView').then((m) => ({ default: m.DrillView })))
 const WorkspaceWindow = lazy(() => import('./components/WorkspaceWindow').then((m) => ({ default: m.WorkspaceWindow })))
+const LiveMock = lazy(() => import('./components/interview/LiveMock').then((m) => ({ default: m.LiveMock })))
 const MockView = lazy(() => import('./components/mock/MockView').then((m) => ({ default: m.MockView })))
 const SharpView = lazy(() => import('./components/sharp/SharpView').then((m) => ({ default: m.SharpView })))
 
@@ -298,6 +299,8 @@ export default function App() {
       ? mockStudyContext(mock?.phase ?? 'brief', mock?.title ?? 'Mock')
       : view.kind === 'sharp'
         ? { label: 'Sharpness', kind: 'practice', noBreaks: true }
+      : view.kind === 'interview-mock'
+        ? { label: 'Live mock', kind: 'practice', noBreaks: true }
       : view.kind === 'session' || view.kind === 'quiz'
       ? { label: view.kind === 'session' ? `${view.mode}: ${view.topic}` : 'Quiz', kind: 'lesson', noBreaks: view.kind === 'session' && !!view.options?.timed, path: view.scope.kind === 'note' ? view.scope.path : undefined }
       : view.kind === 'exam'
@@ -543,7 +546,7 @@ export default function App() {
 
   // Views with their own tutor beside them don't get the floating Ask button or the chat panel
   // A course being read has its tutor docked in its reading column (the right is the video's)
-  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam', 'mock', 'reader', 'ipynb', 'writing', 'comprehension'].includes(view.kind) || (view.kind === 'file' && /\.(canvas|ipynb)$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
+  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam', 'mock', 'interview-mock', 'reader', 'ipynb', 'writing', 'comprehension'].includes(view.kind) || (view.kind === 'file' && /\.(canvas|ipynb)$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
   // In the new design Home is the whole width of the window and has its own ask box: the tutor
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
   // …until you ask something from Home: then it opens there with your question, and stays until you close it
@@ -554,7 +557,7 @@ export default function App() {
   // Pop-out windows (tide-popout): the reader is meant to be a pop-out kind ({ kind: 'reader', path }) once that lands
   const immersive = ((view.kind === 'courses' && !!view.id) || view.kind === 'reader') && !focusId
   // A mock in progress is focus mode: the sidebar steps away until it is marked
-  const mockFocus = view.kind === 'mock' && (mock?.phase === 'live' || mock?.phase === 'preparing' || mock?.phase === 'marking')
+  const mockFocus = (view.kind === 'mock' || view.kind === 'interview-mock') && (mock?.phase === 'live' || mock?.phase === 'preparing' || mock?.phase === 'marking')
   const noPanel = ownTutor || (tide && wide && homeAsked === null)
   // A pop-out has none of Tide's chrome (lib/popout chromeFor)
   const chrome = chromeFor({ focus: !!focusId, collapsed: settings.sidebarCollapsed, immersive, mockFocus })
@@ -582,6 +585,7 @@ export default function App() {
   // Guided projects: a small hook (components/WorkshopView.tsx)
   else if (view.kind === 'projects') main = <ProjectsPage />
   else if (view.kind === 'work') main = <FlightPlan key={view.slug} slug={view.slug} />
+  else if (view.kind === 'interview-mock') main = <LiveMock key={`${view.slug}:${view.round}`} slug={view.slug} round={view.round} />
   else if (view.kind === 'writing') main = view.path ? <WritingPiece key={`${view.path}:${view.nonce ?? ''}`} path={view.path} talk={!!view.talk} review={!!view.review} /> : <WritingView />
   else if (view.kind === 'comprehension') main = <ComprehensionView key={view.lesson ?? `home${view.fresh?.nonce ?? ''}`} lesson={view.lesson} fresh={view.fresh} />
   else if (view.kind === 'courses') main = <CoursesView key={view.id ?? ''} id={view.id} lesson={view.lesson} area={view.area} />
@@ -652,7 +656,7 @@ export default function App() {
           aria-labelledby={!focusId && app.tabs.length > 1 ? `tab-${app.activeTab}` : undefined}
           ref={(el) => void (tabRoot.current = el)}
         >
-          {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock', 'reader', 'workspace'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
+          {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock', 'interview-mock', 'reader', 'workspace'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
           {/* The classic design has no top bar: pages that can pop out (a project, a course, the workout) get the button on their own */}
           {!tide && canPopOut(view as PopView) && ['notebook', 'courses', 'workout'].includes(view.kind) && (
             <div className="pop-float no-drag">
