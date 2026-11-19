@@ -1,4 +1,5 @@
 import { WorkoutHomeCard } from '../workout/Workout'
+import { InterviewHomeCard } from '../interview/InterviewPrep'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ChatScope, Mastery, NoteMeta } from '@shared/types'
 import { lateText, type Forecast } from '@shared/forecast'
@@ -354,6 +355,8 @@ export function HomeTide(p: HomeTideProps) {
               </span>
             </div>
           </section>
+
+          <InterviewHomeCard variant="tide" />
 
           <WorkoutHomeCard variant="tide" />
 

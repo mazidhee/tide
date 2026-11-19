@@ -379,13 +379,14 @@ export function lenientFrontMatter(raw: string): { data: Record<string, unknown>
 }
 
 /** A new target.md, from the New target form */
-export function targetMarkdown(t: { company: string; role: string; date?: string; slidesDue?: string; sources: string[]; links: string[] }): string {
+export function targetMarkdown(t: { company: string; role: string; date?: string; slidesDue?: string; timezone?: string; sources: string[]; links: string[] }): string {
   const q = (s: string) => (/^[\w .,()/&+-]*$/.test(s) && !/^\d/.test(s) && !/:\s/.test(s) ? s : JSON.stringify(s))
   const list = (k: string, xs: string[]) => (xs.length ? `${k}:\n${xs.map((x) => `  - ${JSON.stringify(x)}`).join('\n')}\n` : `${k}: []\n`)
   return (
     `---\ncompany: ${q(t.company)}\nrole: ${q(t.role)}\n` +
     (t.date ? `date: ${t.date}\n` : '') +
     (t.slidesDue ? `slidesDue: ${t.slidesDue}\n` : '') +
+    (t.timezone && validZone(t.timezone) ? `timezone: ${t.timezone}\n` : '') +
     list('sources', t.sources) +
     list('links', t.links) +
     `rounds: []\n---\n\n# ${t.company}${t.role ? `, ${t.role}` : ''}\n\nNotes on the format, and advice from people who have done it.\n`
@@ -880,6 +881,15 @@ export const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s 
 
 // ---------- Cards: added each day, reviewed morning and evening ----------
 
+/** A target's cards file ("Interview prep/<name>/cards.md"): reviewed whether or not it is tagged */
+export const isTargetCards = (path: string) => new RegExp(`^${TARGETS_FOLDER}/[^/]+/cards\\.md$`, 'i').test(path)
+
+/** The deck a card file's cards go in: "Interview: <name>" for a target's, else its top folder */
+export function deckOf(path: string): string {
+  if (isTargetCards(path)) return `Interview: ${path.split('/')[1]}`
+  return path.includes('/') ? path.split('/')[0] : 'Unsorted'
+}
+
 export const CARDS_PER_DAY = 10
 /** Morning ends at 2pm: a review after that is the evening one */
 export const EVENING_FROM_HOUR = 14
@@ -969,7 +979,7 @@ export const CRITERIA: Record<DrillKind, { id: string; label: string }[]> = {
   scenario: [
     { id: 'risks', label: 'Risks found' },
     { id: 'mitigation', label: 'Mitigation' },
-    { id: 'communication', label: 'Escalation and communication' }
+    { id: 'communication', label: 'Escalation' }
   ],
   talk: [
     { id: 'brief', label: 'Covers the brief' },
@@ -1226,6 +1236,8 @@ export interface NewTarget {
   role: string
   date?: string
   slidesDue?: string
+  /** The Mac's zone when it was made, so the times stay put if the Mac travels */
+  timezone?: string
   sources: string[]
   links: string[]
 }

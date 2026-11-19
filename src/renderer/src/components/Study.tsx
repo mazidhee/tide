@@ -200,7 +200,7 @@ function Decks({ onStudy }: { onStudy(scope: ChatScope): void }) {
                   {d.due > 0 && <span className="d-due" style={{ flexGrow: d.due }} />}
                 </span>
                 <span className="rv-mix-text">{[d.new && `${d.new} new`, d.learning && `${d.learning} learning`, d.due && `${d.due} due`].filter(Boolean).join(', ') || 'All caught up'}</span>
-                <button className={`btn small${d.due || d.new ? ' primary' : ''}`} disabled={!d.due && !d.new} onClick={() => onStudy(name === 'Unsorted' ? { kind: 'vault' } : { kind: 'folder', path: name })}>
+                <button className={`btn small${d.due || d.new ? ' primary' : ''}`} disabled={!d.due && !d.new} onClick={() => onStudy(stats.deckScopes?.[name] ?? (name === 'Unsorted' ? { kind: 'vault' } : { kind: 'folder', path: name }))}>
                   Study
                 </button>
               </li>

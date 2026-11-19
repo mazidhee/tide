@@ -1154,6 +1154,22 @@
   gap: 10px;
 }
 
+.it-home-when {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 6px;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.it-home-when strong {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
 .it-home-ready {
   display: grid;
   grid-template-columns: 1fr auto;

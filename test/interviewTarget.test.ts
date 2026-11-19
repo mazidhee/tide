@@ -106,12 +106,13 @@ describe('target.md', () => {
     expect(r.map((x) => x.kind)).toEqual(['technical', 'behavioural'])
   })
   it('writes a new target.md that reads back', () => {
-    const md = targetMarkdown({ company: 'Fabrikam: Bank', role: 'Analyst', date: '2026-12-01T10:30', sources: ['/Users/a/prep'], links: ['https://example.org/x'] })
+    const md = targetMarkdown({ company: 'Fabrikam: Bank', role: 'Analyst', date: '2026-12-01T10:30', timezone: 'Europe/Paris', sources: ['/Users/a/prep'], links: ['https://example.org/x'] })
     const m = matter(md)
     const back = parseTarget(m.data, m.content, 'Interview prep/Fabrikam', md)
     expect(back.company).toBe('Fabrikam: Bank')
     expect(back.date).toBe('2026-12-01T10:30')
     expect(back.sources).toEqual(['/Users/a/prep'])
+    expect(back.timezone).toBe('Europe/Paris')
   })
   it('slugs names', () => {
     expect(slugOf('Contoso  Bank — Grad 2027!')).toBe('contoso-bank-grad-2027')

@@ -112,9 +112,12 @@ async function readFiles(folder: string): Promise<{ files: TargetFiles; has: Tar
   let data: Record<string, unknown> = {}
   let body = raw
   try {
-    const m = matter(raw)
+    // Options given, so gray-matter doesn't cache: it caches a file before parsing it, and a
+    // second read of front matter that failed would come back empty instead of failing again
+    const m = matter(raw, {})
     data = m.data
     body = m.content
+    if (/^---\r?\n/.test(body)) throw new Error('front matter not read')
   } catch {
     // YAML that doesn't parse (an unquoted ": " in a note, say): read it line by line instead
     const l = lenientFrontMatter(raw)
@@ -663,7 +666,7 @@ export async function clarify(slug: string, r: ClarifyRequest): Promise<{ reply:
 export function registerInterview() {
   ipcMain.handle('interview:list', () => listTargets())
   ipcMain.handle('interview:get', (_e, slug: string) => getTarget(String(slug)))
-  ipcMain.handle('interview:create', (_e, t: NewTarget) => createTarget({ company: String(t?.company ?? ''), role: String(t?.role ?? ''), date: t?.date || undefined, slidesDue: t?.slidesDue || undefined, sources: Array.isArray(t?.sources) ? t.sources.map(String) : [], links: Array.isArray(t?.links) ? t.links.map(String) : [] }))
+  ipcMain.handle('interview:create', (_e, t: NewTarget) => createTarget({ company: String(t?.company ?? ''), role: String(t?.role ?? ''), date: t?.date || undefined, slidesDue: t?.slidesDue || undefined, timezone: t?.timezone || undefined, sources: Array.isArray(t?.sources) ? t.sources.map(String) : [], links: Array.isArray(t?.links) ? t.links.map(String) : [] }))
   ipcMain.handle('interview:attempt', (_e, slug: string, a: Attempt) => saveAttempt(String(slug), a))
   ipcMain.handle('interview:mark', (_e, slug: string, i: MarkInput) => markAnswer(String(slug), i))
   ipcMain.handle('interview:probe', (_e, slug: string, r: ProbeRequest) => probe(String(slug), r))

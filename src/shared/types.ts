@@ -513,6 +513,8 @@ export interface ReviewStats {
   retention: number | null
   totalReviews: number
   decks: Record<string, { total: number; new: number; due: number; learning: number; mature: number }>
+  /** Where a deck that isn't a top folder lives (an interview target's cards.md) */
+  deckScopes?: Record<string, ChatScope>
 }
 
 export type Verdict = 'correct' | 'partial' | 'wrong'

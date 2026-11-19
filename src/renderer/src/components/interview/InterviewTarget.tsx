@@ -406,7 +406,7 @@ export function InterviewTarget({ slug, drill, mode: wantMode }: { slug: string;
               </div>
             </Section>
 
-            <Section id="answering" title="How to answer" count={`${kindsHere.length} kind${kindsHere.length === 1 ? '' : 's'} of question`}>
+            <Section id="answering" title="How to answer" count={`${ANSWER_KINDS.filter((k) => kindsHere.includes(k.kind)).length}`}>
               <ul className="it-tiles">
                 {ANSWER_KINDS.filter((k) => kindsHere.includes(k.kind)).map((k) => (
                   <li key={k.kind}>
