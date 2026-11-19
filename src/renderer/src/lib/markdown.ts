@@ -1,4 +1,5 @@
 import { readingHtml } from './reading'
+import { quoteHtml } from './primaryQuote'
 import { explainerForUrl, type Explainer } from '@shared/explainers'
 import { normalizeMath } from '@shared/modelText'
 import { LOCAL_VIDEO, linkTime, parseTime, youtubeIdOf } from '@shared/video'
@@ -472,6 +473,8 @@ export function createMarkdown() {
   md.renderer.rules.fence = (tokens, idx, opts, env, self) => {
     // [source-led] a reading Tide put into a lesson: the source's words under their attribution (lib/reading.ts)
     if (tokens[idx].info.trim() === 'reading') return readingHtml(tokens[idx].content, (m) => md.render(m, env))
+    // A quotation from a paper, PEP or docs section, checked against the source by quote_source (lib/primaryQuote.ts)
+    if (tokens[idx].info.trim() === 'quote') return quoteHtml(tokens[idx].content, (m) => md.renderInline(m, env))
     const html = fenceRule(tokens, idx, opts, env, self)
     const t = tokens[idx]
     return t.attrGet('data-line') !== null

@@ -10,11 +10,8 @@ import { join, relative, resolve, sep } from 'path'
 import {
   REF_LABELS,
   REF_SOURCES,
-  chunkCode,
-  chunkHtml,
-  chunkMan,
-  chunkNotebook,
   decodeEntities,
+  passagesOf,
   citeOf,
   type RefHit,
   type RefPassage,
@@ -94,13 +91,8 @@ function walk(root: string, s: RefSource, out: { rel: string; size: number; mtim
   return out
 }
 
-/** A file of a source into passages */
-export function passagesOf(s: RefSource, rel: string, text: string): RefPassage[] {
-  if (s === 'cpython') return chunkCode(s, rel, text)
-  if (s === 'man') return chunkMan(rel, text)
-  if (s === 'books' && rel.endsWith('.ipynb')) return chunkNotebook(rel, text)
-  return chunkHtml(s, rel, text)
-}
+/** A file of a source into passages (shared/reference) */
+export { passagesOf }
 
 // ---------- The index ----------
 

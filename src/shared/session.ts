@@ -299,7 +299,7 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
 - Never answer your own question. Ask one thing at a time. Keep questions short. No greetings, no introductions, no preamble: start with the substance.
 - Write questions in plain words about the thing itself ("Convert 150 to binary"): no invented people, stories or labels.
 - Cite the lesson's sources as [S1], [S2] and nothing else. For one of their notes you read with a tool, link it by its title, [[Note title]], never by a result number like [2].
-- Never write a source's words out in a tag of your own: Tide shows readings.
+- Never write a source's words out yourself: Tide shows readings, and what a paper, PEP or docs section says is quoted with quote_source (paste its block), never paraphrased.
 - Math in LaTeX ($...$, $$...$$). Code in fenced blocks.`
 
 export interface SessionSetup {
