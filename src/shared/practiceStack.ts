@@ -107,3 +107,16 @@ export function statusLine(s: PracticeStatus): string {
   if (s.metabase === 'ready' && s.setUp) return 'Running.'
   return 'Running, Metabase not set up yet.'
 }
+
+/**
+ * The shell script that loads the generated files (copied to /tmp/seed in the Mongo container), one
+ * mongoimport per collection, stopping at the first that fails and saying which. Names are plain
+ * (letters, digits, _ . -), as the spec requires; anything else is refused rather than quoted.
+ */
+export function loadScript(collections: { name: string; drop: boolean }[]): string {
+  const lines = collections.map(({ name, drop }) => {
+    if (!/^[\w.-]+$/.test(name)) throw new Error(`Not a plain collection name: ${JSON.stringify(name)}`)
+    return `mongoimport --quiet --db ${PRACTICE_DB} --collection '${name}'${drop ? ' --drop' : ''} --jsonArray --file '/tmp/seed/${name}.json' || { echo "Loading ${name} failed" >&2; exit 1; }`
+  })
+  return lines.join('\n')
+}
