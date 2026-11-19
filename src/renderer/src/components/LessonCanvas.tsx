@@ -3,11 +3,13 @@ import { parseCanvas, serializeCanvas, type Canvas } from '@shared/canvas'
 import { useApp } from '../state'
 import { CanvasEditor } from './CanvasEditor'
 import { Icon } from './Icon'
+import { useCanvasFiles, newEdges } from './flow/canvasFiles'
 
 /**
  * The canvas beside a walkthrough: the tutor draws the system as it explains it (each component as
- * it appears, each connection in the order things flow), and you can move, add and correct it. It
- * is an ordinary .canvas file, so it stays with the topic for later.
+ * it appears, each connection in the order things flow), and you can move, add and correct it.
+ * Each connection the tutor adds plays as it arrives: a request travels it, so you see the step
+ * being explained move. It is an ordinary .canvas file, so it stays with the topic for later.
  */
 export function LessonCanvas({ path, lessonId, revision = 0 }: { path: string; lessonId: string; /** Bumped when the app redraws the file */ revision?: number }) {
   const app = useApp()
@@ -15,6 +17,9 @@ export function LessonCanvas({ path, lessonId, revision = 0 }: { path: string; l
   const [version, setVersion] = useState(0)
   const pending = useRef<Canvas | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const shown = useRef<Canvas | null>(null)
+  const [announce, setAnnounce] = useState<{ ids: string[]; nonce: number }>()
+  const fileProps = useCanvasFiles()
 
   const load = useCallback(
     () =>
@@ -22,8 +27,13 @@ export function LessonCanvas({ path, lessonId, revision = 0 }: { path: string; l
         .read(path)
         .then((raw) => {
           pending.current = null
-          setCanvas(parseCanvas(raw))
+          const next = parseCanvas(raw)
+          // What the tutor just drew plays once (not everything, the first time the canvas opens)
+          const added = shown.current ? newEdges(shown.current, next) : []
+          shown.current = next
+          setCanvas(next)
           setVersion((v) => v + 1)
+          if (added.length) setAnnounce({ ids: added, nonce: Date.now() })
         })
         .catch(() => setCanvas({ nodes: [], edges: [] })),
     [path]
@@ -55,6 +65,7 @@ export function LessonCanvas({ path, lessonId, revision = 0 }: { path: string; l
   }, [load, flush, lessonId, app])
 
   const change = (next: Canvas) => {
+    shown.current = next
     setCanvas(next)
     pending.current = next
     clearTimeout(saveTimer.current)
@@ -69,7 +80,7 @@ export function LessonCanvas({ path, lessonId, revision = 0 }: { path: string; l
           <Icon name="external" size={13} />
         </button>
       </div>
-      <div className="lesson-canvas-body">{canvas && <CanvasEditor canvas={canvas} onChange={change} version={version} compact />}</div>
+      <div className="lesson-canvas-body">{canvas && <CanvasEditor canvas={canvas} onChange={change} version={version} compact announce={announce} {...fileProps} />}</div>
     </aside>
   )
 }

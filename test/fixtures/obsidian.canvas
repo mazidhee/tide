@@ -1,0 +1,15 @@
+{
+	"nodes":[
+		{"id":"g1","type":"group","x":-60,"y":-80,"width":620,"height":300,"label":"Payments","color":"4","background":"Assets/bg.png","backgroundStyle":"cover"},
+		{"id":"t1","type":"text","text":"# API\nHandles **requests**","x":-20,"y":-20,"width":250,"height":120,"color":"#ff8800"},
+		{"id":"f1","type":"file","file":"Notes/Kafka.md","subpath":"#Partitions","x":300,"y":-20,"width":220,"height":200},
+		{"id":"l1","type":"link","url":"https://jsoncanvas.org/spec/1.0/","x":700,"y":0,"width":400,"height":300},
+		{"id":"w1","type":"widget","x":0,"y":400,"width":100,"height":100,"pluginData":{"a":[1,2,{"b":null}]}}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"t1","fromSide":"right","fromEnd":"none","toNode":"f1","toSide":"left","toEnd":"arrow","color":"2","label":"publish"},
+		{"id":"e2","fromNode":"f1","toNode":"gone"},
+		{"id":"e3","fromNode":"l1","toNode":"t1","fromEnd":"arrow","toEnd":"arrow","customFlag":true}
+	],
+	"metadata":{"version":"1.0","frontmatter":{}}
+}
