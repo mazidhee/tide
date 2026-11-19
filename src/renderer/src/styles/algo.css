@@ -1,0 +1,275 @@
+/*
+  Practice › Daily problem (components/AlgoPanel). One card for the day's problem, then the
+  progress beneath it. Theme tokens only, so it holds in every theme.
+*/
+
+.al-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.al-panel .pv-sub {
+  margin-bottom: 0;
+}
+
+.al-card {
+  padding: 20px 22px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m, 10px);
+  background: var(--bg-raised);
+}
+
+.al-card.solved {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+
+.al-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+
+.al-kicker {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.al-kicker span + span::before {
+  content: '·';
+  margin-right: 14px;
+  color: var(--line-strong);
+}
+
+.al-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.al-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.al-state.good {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.al-state.bad {
+  color: var(--warn);
+}
+
+.al-prompt {
+  margin: 12px 0 10px;
+  max-width: 68ch;
+  font-size: var(--text-md);
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.al-panel code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-family: var(--font-code);
+  font-size: 0.92em;
+  color: var(--ink);
+}
+
+.al-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.al-examples code {
+  display: inline-block;
+  padding: 4px 8px;
+}
+
+.al-hint {
+  margin: 0 0 14px;
+  padding: 9px 12px;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  background: var(--accent-soft);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.al-hint strong {
+  margin-right: 6px;
+  color: var(--accent);
+}
+
+.al-result {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg-inset);
+  font-size: var(--text-sm);
+}
+
+.al-result ul {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.al-result li {
+  display: grid;
+  grid-template-columns: 14px auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.al-result li svg {
+  color: var(--danger);
+  align-self: center;
+}
+
+.al-test {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.al-why {
+  overflow: hidden;
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.al-result pre {
+  margin: 0;
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  color: var(--danger);
+  white-space: pre-wrap;
+}
+
+.al-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.al-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.al-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 30px;
+  padding: 0 4px;
+}
+
+.al-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.al-stat strong {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.al-stat span {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.al-fortnight {
+  display: flex;
+  gap: 5px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.al-fortnight li {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--bg-inset);
+}
+
+.al-fortnight li.tried {
+  background: color-mix(in srgb, var(--warn) 45%, var(--bg-inset));
+}
+
+.al-fortnight li.solved {
+  background: var(--accent);
+}
+
+.al-core {
+  padding: 14px 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.al-core-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.al-core-head span + span {
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.al-bar {
+  height: 5px;
+  margin: 8px 0 10px;
+  border-radius: 3px;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.al-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.al-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.al-done .al-prompt {
+  margin-bottom: 0;
+}

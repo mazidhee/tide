@@ -77,6 +77,8 @@ export function registerIde(): void {
     // A planned project counts failed runs: after a few, Claude may give a hint as code
     const failed = r.outcomes.filter((o) => o.status === 'fail' || o.status === 'error').length
     void import('../ideaProjects').then((m) => m.noteTestRun(root, { failed, total: r.outcomes.length })).catch(() => {})
+    // A daily algorithm problem's folder: the run counts as a check
+    void import('../algoPractice').then((m) => m.noteIdeRun(root, r)).catch(() => {})
     return r
   })
   handle('ide:tests:setup', () => setupPytest())
