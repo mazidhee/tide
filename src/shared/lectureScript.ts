@@ -8,6 +8,7 @@
  * Pure: the main process (main/lectureVoice) asks Claude's quick model for the script and falls
  * back to fallbackScript here when Claude isn't there.
  */
+import { parseQuote } from './primaryQuote'
 
 export type LectureTone = 'explain' | 'correct' | 'miss' | 'question'
 export type LectureMode = 'all' | 'gist'
@@ -44,6 +45,11 @@ export function sourceOf(reply: string): string {
     .replace(/<(exercise|visual|diagram|figure|manim|plot|canvas|explorable|sim)\b[^>]*\/>/gi, ' [[a picture on the screen]] ')
     .replace(/<(visual|diagram|figure|manim|plot|canvas|explorable|sim)\b[^>]*>[\s\S]*?<\/\1>/gi, ' [[a picture on the screen]] ')
     .replace(/```(mermaid|dot|svg)[\s\S]*?```/gi, ' [[a diagram on the screen]] ')
+    // A checked quotation from a paper, PEP or docs section (shared/primaryQuote): said with who said it
+    .replace(/(`{3,})quote\n([\s\S]*?)\n\1/g, (_m, _f: string, body: string) => {
+      const q = parseQuote(body)
+      return q?.sealed && q.quote.kind !== 'source' ? `\n\n${q.quote.title} says: “${q.quote.text.replace(/\s+/g, ' ')}”\n\n` : ' [[a quotation on the screen]] '
+    })
     .replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, lang: string, body: string) => ` [[${describeCode(lang, body)}]] `)
     .replace(/\$\$([\s\S]*?)\$\$/g, (_m, tex: string) => ` [[an equation on the screen: ${tex.trim().slice(0, 80)}]] `)
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' [[a picture on the screen]] ')

@@ -114,6 +114,67 @@
   color: var(--warn);
 }
 
+/*
+  A quotation from a primary source (lib/primaryQuote.ts): a paper's, PEP's or docs section's own
+  words, short, set inside the tutor's explanation with a rule beside them and the source under them.
+*/
+.prose .primary-quote {
+  margin: 14px 0 16px;
+  padding: 2px 0 2px 16px;
+  border-left: 3px solid var(--accent);
+}
+
+.prose .primary-quote blockquote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-style: normal;
+}
+
+.prose .primary-quote blockquote p {
+  margin: 0 0 0.6em;
+}
+
+.prose .primary-quote-cite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.prose .primary-quote-label {
+  flex: 0 0 100%;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.prose .primary-quote-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.prose .primary-quote-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  margin-top: 4px;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.prose .primary-quote-exact {
+  margin-right: auto;
+}
+
 /* The lesson's tool: teach from sources, or let the tutor explain */
 .tool-btn.led-toggle[aria-pressed='false'] {
   color: var(--ink-muted);
