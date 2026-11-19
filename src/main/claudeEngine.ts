@@ -924,6 +924,12 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   // Working marked line by line in the maths answer box (shared/mathsAnswer): its verdict and misconception count as the marker's
   const working = answering ? (await import('@shared/mathsAnswer')).parseWorkingMarks(text([...req.messages].reverse().find((m) => m.role === 'user')?.content)) : null
   if (working?.marks.verdict && !verdict) verdict = working.marks.verdict
+  // Its final answer proved right and no step proved wrong: correct, whatever a marker doubted
+  if (working?.marks.finalExact && working.marks.verdict === 'correct' && verdict !== 'correct') {
+    verdict = 'correct'
+    misconception = undefined
+    markNote = exactSaid
+  }
   if (working?.marks.misconception && !misconception) misconception = working.marks.misconception
   // No separate marker (the tutor is already the strongest model): the exact check goes to the tutor itself
   if (exactSaid && !markNote) markNote = exactSaid

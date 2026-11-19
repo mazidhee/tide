@@ -35,9 +35,11 @@ export interface PaperLine {
 }
 
 export interface LineMark {
-  /** true right, false wrong, null a line that claims nothing (a heading, words) */
+  /** true right, false wrong (certain), null a line that claims nothing (a heading, words) or one only queried */
   ok: boolean | null
   note: string
+  /** The marker thought this line wrong but nothing proved it: shown as a question, never a cross */
+  doubt?: true
 }
 
 export interface Marked {
@@ -47,6 +49,8 @@ export interface Marked {
   summary: string
   misconception?: { name: string; text: string }
   by: 'claude' | 'sympy'
+  /** SymPy checked the last line against the solution's answer and they are equal */
+  finalExact?: true
 }
 
 /** What a marked answer carries into the lesson, and back out for the transcript */
@@ -73,6 +77,57 @@ export interface CalcResult {
 export interface StepCheck {
   status: StepStatus
   why: string
+  /** Proved equal to the line before (not just its own = signs): a cross on it would be wrong */
+  follows?: boolean
+}
+
+// ---------- How sure a line's mark is ----------
+
+const TRIG_WORD = /\\(?:arc)?(?:sin|cos|tan|sec|csc|cot)(?![a-z])|\\operatorname\{(?:arc)?(?:sin|cos|tan)/
+const PLAIN_LOG = /\\log(?![a-zA-Z])(?!\s*_)/
+
+/**
+ * The other ways a working may have been meant, tried before a step stays wrong: trig in the other
+ * angle unit (sin 30 = 1/2 is right in degrees), and an unmarked log as base 10 (log 100 = 2).
+ */
+export function otherReadings(latexLines: string[], angle: 'rad' | 'deg'): { angle?: 'rad' | 'deg'; log10?: true }[] {
+  const all = latexLines.join(' ')
+  return [...(TRIG_WORD.test(all) ? [{ angle: angle === 'rad' ? ('deg' as const) : ('rad' as const) }] : []), ...(PLAIN_LOG.test(all) ? [{ log10: true as const }] : [])]
+}
+
+/** A step stays wrong only when it is wrong every way it may have been meant; a reading that couldn't run proves nothing */
+export function settleReadings(first: StepCheck[], others: (StepCheck[] | null)[]): StepCheck[] {
+  return first.map((c, i) => (c.status === 'bad' && others.some((o) => o?.[i]?.status !== 'bad') ? { status: 'unknown', why: '' } : c))
+}
+
+const cap = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`
+const lineList = (ns: number[]) => (ns.length === 1 ? `line ${ns[0]}` : `lines ${ns.slice(0, -1).join(', ')} and ${ns[ns.length - 1]}`)
+
+/**
+ * Claude's marks held to what is certain. A cross stands only where SymPy proved the step not
+ * equal; where SymPy proved it equal to the line before, Claude's cross is wrong and becomes a
+ * tick; anywhere else it becomes a question (the note kept, nothing counted against them). And when
+ * SymPy proved the final answer equals the solution's, a doubt can't take the mark down: with no
+ * step proved wrong the verdict is correct; with one, it is never below partial.
+ */
+export function settleMarks(marks: Marked, checks: StepCheck[] | null | undefined, finalExact: boolean): Marked {
+  const lines: LineMark[] = marks.lines.map((m, i) => {
+    const c = checks?.[i]
+    if (c?.status === 'bad') return { ok: false, note: m.ok === false && m.note ? m.note : `${cap(c.why)}.` }
+    if (m.ok !== false) return m
+    if (c?.status === 'ok' && c.follows) return { ok: true, note: 'Checked exactly: it equals the line before.' }
+    return { ok: null, note: m.note, doubt: true }
+  })
+  const proved = lines.some((l) => l.ok === false)
+  const doubted = lines.flatMap((l, i) => (l.doubt ? [i + 1] : []))
+  let { verdict, summary, misconception } = marks
+  if (finalExact && !proved && verdict !== 'correct') {
+    verdict = 'correct'
+    misconception = undefined
+    summary = `Your final answer is right: SymPy checked it against the solution.${doubted.length ? ` ${cap(lineList(doubted))} may be worth another look, but nothing there was shown to be wrong.` : ''}`
+  } else if (finalExact && verdict === 'wrong') verdict = 'partial'
+  const { misconception: _, ...rest } = marks
+  return { ...rest, lines, verdict, summary, ...(misconception ? { misconception } : {}), ...(finalExact ? { finalExact: true as const } : {}) }
 }
 
 // ---------- JSON from a model ----------
@@ -200,7 +255,7 @@ export const dropLine = (lines: PaperLine[], index: number) => lines.filter((_, 
 
 export const MARK_LINES_SYSTEM = `You mark a learner's worked maths line by line, for their tutor. The question and the tutor's own solution are given (the solution is inside <solution> when there is one; the learner never saw it). Their lines are numbered as they wrote them; the reading has been checked by the learner, so take each line as written.
 
-For each line: "ok" true when it is right and follows from what came before (any valid method or order is fine), false when it is wrong or doesn't follow, null for a line that claims nothing (a heading, the question copied out, words). After a wrong line, a later line that correctly follows from it is true, with a note that it carries the earlier slip. "note": one short sentence; for a wrong line, exactly what is wrong (the term dropped, the sign flipped), never a lecture. Tide's exact SymPy checks, when given, are facts about equality between lines: trust a "not equal" unless the line is plainly not an equality claim.
+For each line: "ok" true when it is right and follows from what came before (any valid method or order is fine), false when it is wrong or doesn't follow, null for a line that claims nothing (a heading, the question copied out, words). After a wrong line, a later line that correctly follows from it is true, with a note that it carries the earlier slip. "note": one short sentence; for a wrong line, exactly what is wrong (the term dropped, the sign flipped), never a lecture. Tide's exact SymPy checks, when given, are facts about equality between lines: trust a "not equal" unless the line is plainly not an equality claim, and never mark false a line checked equal to the line before. Mark a line false only when you are sure it is wrong as written: a line written another valid way (factorised or expanded, a rounded decimal, the other solution of a periodic equation, one case of several) is true. Tide shows a false line it can't prove wrong as a question, not a cross.
 
 Then the whole answer: "verdict" correct (right and complete), partial (right method with a slip, or incomplete) or wrong. "summary": two or three sentences to the learner ("you"), naming the first wrong line by its number and what to do about it; no praise padding. "misconception": only when a wrong line comes from a specific wrong belief rather than a slip: {"name": "under 8 words", "description": "one sentence"}.
 
@@ -211,7 +266,7 @@ Reply with JSON only: {"lines": [{"n": 1, "ok": true, "note": "…"}], "verdict"
 export function markLinesPrompt(question: string, lines: string[], checks?: StepCheck[]): string {
   const sympy = checks?.some((c) => c.status !== 'unknown')
     ? `\n\nTide's exact SymPy checks of each line against the one before:\n${checks
-        .map((c, i) => (c.status === 'unknown' ? null : `line ${i + 1}: ${c.status === 'ok' ? 'equal (checked)' : `NOT equal: ${c.why}`}`))
+        .map((c, i) => (c.status === 'unknown' ? null : `line ${i + 1}: ${c.status === 'ok' ? (c.follows ? 'equal to the line before (checked)' : 'its own = signs check out') : `NOT equal: ${c.why}`}`))
         .filter(Boolean)
         .join('\n')}`
     : ''
@@ -246,7 +301,7 @@ export function marksFromSympy(checks: StepCheck[], count: number): Marked {
   const lines: LineMark[] = Array.from({ length: count }, (_, i) => {
     const c = checks[i]
     if (!c || c.status === 'unknown') return { ok: null, note: '' }
-    return c.status === 'ok' ? { ok: true, note: 'Checked: equal to the line before.' } : { ok: false, note: `${c.why.charAt(0).toUpperCase()}${c.why.slice(1)}.` }
+    return c.status === 'ok' ? { ok: true, note: c.follows ? 'Checked: equal to the line before.' : 'Checked: its = signs hold.' } : { ok: false, note: `${cap(c.why)}.` }
   })
   const bad = lines.findIndex((l) => l.ok === false)
   const ok = lines.filter((l) => l.ok === true).length
@@ -270,14 +325,15 @@ export function workingMessage(w: WorkingMarks): { body: string; note: string } 
   const body = `${w.kind === 'paper' ? 'My working on paper:' : 'My working:'}\n\n${pics ? `${pics}\n\n` : ''}${numbered}`
   const m = w.marks
   const each = m.lines
-    .map((x, i) => (x.ok === null && !x.note ? null : `line ${i + 1} ${x.ok === true ? '✓' : x.ok === false ? '✗' : '·'}${x.note ? ` ${x.note}` : ''}`))
+    .map((x, i) => (x.ok === null && !x.note ? null : `line ${i + 1} ${x.ok === true ? '✓' : x.ok === false ? '✗' : x.doubt ? '? (queried, not shown wrong: never mark it down for this)' : '·'}${x.note ? ` ${x.note}` : ''}`))
     .filter(Boolean)
     .join('; ')
   const who = m.by === 'claude' ? `Claude marked ${w.kind === 'paper' ? 'this working from the learner’s photo' : 'these steps'} line by line${w.kind === 'paper' ? ' (the learner checked the reading of each line first)' : ''}` : 'Tide checked each step against the one before with SymPy (exact, but it can only tell equal from not equal)'
   const verdict = m.verdict ? ` Verdict: "${m.verdict}". Use this verdict in your <grade>, and teach from the first wrong line.` : ' Mark the whole answer yourself; SymPy’s ✗ is a fact.'
+  const final = m.finalExact ? ' SymPy checked their final answer against the solution: it is right.' : ''
   const mis = m.misconception ? ` The misconception behind it: ${m.misconception.name}${m.misconception.text ? ` (${m.misconception.text})` : ''}. Address it directly.` : ''
   const json = JSON.stringify({ kind: w.kind, pages: w.pages, lines: w.lines.map((l) => ({ ...l, box: l.box ? l.box.map((x) => Math.round(x * 1000) / 1000) : null })), marks: m })
-  const note = `${who}: ${each || 'no line could be checked'}.${verdict}${mis}${m.summary ? ` Summary given to the learner: ${m.summary}` : ''}\n<${TAG}>${json}</${TAG}>`
+  const note = `${who}: ${each || 'no line could be checked'}.${final}${verdict}${mis}${m.summary ? ` Summary given to the learner: ${m.summary}` : ''}\n<${TAG}>${json}</${TAG}>`
   return { body, note }
 }
 
@@ -292,6 +348,12 @@ export function parseWorkingMarks(message: string): WorkingMarks | null {
   } catch {
     return null
   }
+}
+
+/** A mark below correct for working whose final answer SymPy proved right, with no step proved wrong: it can't stand */
+export function keptCorrect(answer: string, verdict: string | undefined): boolean {
+  const w = parseWorkingMarks(answer)
+  return !!verdict && verdict !== 'correct' && !!w?.marks.finalExact && w.marks.verdict === 'correct'
 }
 
 /** The note for an answer in words that Tide read back and the learner confirmed */

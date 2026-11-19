@@ -20,16 +20,23 @@ import {
   correctLine,
   decimalAdds,
   dropLine,
+  keptCorrect,
   markLinesPrompt,
   marksFromSympy,
+  otherReadings,
   parseLineMarks,
   parseReadBack,
   parseTranscription,
   parseWorkingMarks,
   readBackNote,
+  settleMarks,
+  settleReadings,
   shortDecimal,
   toBox,
-  workingMessage
+  workingMessage,
+  type Marked,
+  type StepCheck,
+  type StepStatus
 } from '../src/shared/mathsAnswer'
 import { ownWords } from '../src/shared/session'
 
@@ -151,8 +158,10 @@ async function worker(reqs: Record<string, unknown>[]): Promise<Record<string, u
       if (out.length === reqs.length) resolve()
     })
   )
+  // A worker that dies (a Python error) fails the test instead of hanging it
+  const died = new Promise<void>((resolve) => child.on('exit', () => resolve()))
   for (const r of reqs) child.stdin.write(JSON.stringify(r) + '\n')
-  await done
+  await Promise.race([done, died])
   child.kill()
   return out
 }
@@ -202,9 +211,98 @@ describe.skipIf(!python)('the calculator, exactly (SymPy)', () => {
     const st = (r: Record<string, unknown>) => (r.steps as { status: string }[]).map((s) => s.status)
     // The definition can't be checked (f is theirs); the dropped −4h is caught; the rest follows from it
     expect(st(a)).toEqual(['unknown', 'unknown', 'bad', 'ok', 'ok'])
-    // An equation isn't held to its sides being equal; squaring gains a root (unknown); taking a square root loses one (bad)
-    expect(st(b)).toEqual(['unknown', 'ok', 'ok', 'unknown', 'bad'])
+    // An equation isn't held to its sides being equal; squaring gains a root, and taking a square root
+    // loses one, which a domain (x > 0) can allow: neither is called wrong
+    expect(st(b)).toEqual(['unknown', 'ok', 'ok', 'unknown', 'unknown'])
+    // Only a step proved equal to the line before is marked as following from it
+    expect((b.steps as StepCheck[]).map((s) => s.follows)).toEqual([false, true, true, false, false])
   }, 60_000)
+
+  const chains = async (works: string[][], angle: 'rad' | 'deg' = 'rad', log10 = false) =>
+    (await worker(works.map((w, i) => ({ id: i, op: 'chain', ...(log10 ? { log10: true } : {}), lines: w.map((l) => lineToSympy(parseLatex(l), angle)) })))).sort((x, y) => (x.id as number) - (y.id as number)).map((r) => (r.steps as StepCheck[]).map((s) => s.status))
+
+  it('passes lines that are right but written another way', async () => {
+    const works = [
+      // Rearranged, factorised, expanded, simplified
+      ['x^2-1', '=(x-1)(x+1)'],
+      ['x(x+2)', '=x^2+2x'],
+      ['\\frac{1}{2}', '=\\frac{2}{4}', '=0.5'],
+      ['\\sqrt{8}', '=2\\sqrt{2}'],
+      ['\\sin^2x+\\cos^2x', '=1'],
+      ['2\\sin x\\cos x', '=\\sin 2x'],
+      ['e^{2\\ln x}', '=x^2'],
+      ['2x+3=7', '7=2x+3', '2x=4', '4=2x', '2=x'],
+      // Rounded or cut short, to the places written
+      ['\\frac{2}{3}', '=0.667'],
+      ['\\frac{2}{3}', '=0.67'],
+      ['\\frac{2}{3}', '=0.666'],
+      ['\\sqrt{2}', '=1.414'],
+      ['\\frac{2000}{3}', '=667'],
+      ['\\frac{1}{3}+\\frac{1}{3}+\\frac{1}{3}', '=0.33+0.33+0.33', '=0.99'],
+      ['x^2=2', 'x=1.41'],
+      // Laws that hold where the letters stand for positive numbers
+      ['\\ln(xy)', '=\\ln x+\\ln y'],
+      ['\\sqrt{x^2}', '=x'],
+      ['\\sqrt{ab}', '=\\sqrt{a}\\sqrt{b}'],
+      // A constant of integration, a value put in
+      ['\\int 2x\\,dx', '=x^2+C'],
+      ['3x^2-4', '3(2)^2-4'],
+      ['\\sin(n\\pi)', '=0'],
+      // Real roots only, one turn of a periodic answer, a domain, cases side by side
+      ['x^3=8', 'x=2'],
+      ['\\tan x=1', 'x=\\frac{5\\pi}{4}'],
+      ['\\sin x=0', 'x=\\pi'],
+      ['x^2=4', 'x=-2'],
+      ['(x-3)(x-5)=0', 'x=3', 'x=5'],
+      ['x^2-8x+15=0', 'x-3=0', 'x-5=0'],
+      // ≈ and ≤ don't claim equal
+      ['\\frac{2}{3}', '\\approx 0.6'],
+      ['x+1', '\\le x+2']
+    ]
+    const r = await chains(works)
+    works.forEach((w, i) => expect([w.join('  '), r[i]]).toEqual([w.join('  '), r[i].map((x) => (x === 'bad' ? 'FLAGGED' : x))]))
+    // The plainly equal ones are ticked, not just left alone
+    expect(r[0]).toEqual(['unknown', 'ok'])
+    expect(r[2]).toEqual(['unknown', 'ok', 'ok'])
+    expect(r[7]).toEqual(['unknown', 'ok', 'ok', 'ok', 'ok'])
+  }, 120_000)
+
+  it('still catches a step that is certainly wrong', async () => {
+    const works = [
+      ['2+3', '=6'],
+      ['2x+3=7', 'x=5'],
+      ['(a+b)^2', '=a^2+b^2'],
+      ['\\frac{1}{2}', '=0.6'],
+      ['x^2=4', 'x=3'],
+      ['\\frac{d}{dx}\\left(x^3\\right)', '=3x'],
+      ['x^2+5x+6', '=(x+2)(x+4)'],
+      ['3\\cdot 4=12=13']
+    ]
+    const r = await chains(works)
+    expect(r).toEqual([['unknown', 'bad'], ['unknown', 'bad'], ['unknown', 'bad'], ['unknown', 'bad'], ['unknown', 'bad'], ['unknown', 'bad'], ['unknown', 'bad'], ['bad']])
+  }, 120_000)
+
+  it('reads a step the other ways it may have been meant before it stays wrong', async () => {
+    const trig = ['\\sin 30', '=\\frac{1}{2}']
+    const logs = ['\\log 100', '=2']
+    const [[t], [l]] = [await chains([trig]), await chains([logs])]
+    // As typed, in radians and natural logs, each looks wrong; in degrees and base 10 each is right
+    expect(t).toEqual(['unknown', 'bad'])
+    expect(l).toEqual(['unknown', 'bad'])
+    const [[tDeg], [lTen]] = [await chains([trig], 'deg'), await chains([logs], 'rad', true)]
+    expect(tDeg).toEqual(['unknown', 'ok'])
+    expect(lTen).toEqual(['unknown', 'ok'])
+    expect(otherReadings(trig, 'rad')).toEqual([{ angle: 'deg' }])
+    expect(otherReadings(logs, 'rad')).toEqual([{ log10: true }])
+    expect(otherReadings(['\\log_{2}8', '=3'], 'rad')).toEqual([])
+    const asIs = t.map((status) => ({ status: status as StepStatus, why: status === 'bad' ? "it isn't equal to the line before" : '' }))
+    expect(settleReadings(asIs, [tDeg.map((status) => ({ status: status as StepStatus, why: '' }))]).map((c) => c.status)).toEqual(['unknown', 'unknown'])
+    // Wrong every way, or no other way to read it: it stays wrong
+    expect(settleReadings(asIs, [asIs]).map((c) => c.status)).toEqual(['unknown', 'bad'])
+    expect(settleReadings(asIs, []).map((c) => c.status)).toEqual(['unknown', 'bad'])
+    // Another reading that couldn't run proves nothing either way
+    expect(settleReadings(asIs, [null]).map((c) => c.status)).toEqual(['unknown', 'unknown'])
+  }, 120_000)
 })
 
 // ---------- The tape ----------
@@ -330,7 +428,7 @@ describe('marking working line by line', () => {
       { status: 'bad', why: "it isn't equal to the line before" }
     ])
     expect(p).toContain('1. a\n2. b\n3. c')
-    expect(p).toContain('line 2: equal (checked)')
+    expect(p).toContain('line 2: its own = signs check out')
     expect(p).toContain("line 3: NOT equal: it isn't equal to the line before")
     expect(p).not.toContain('line 1:')
     expect(markLinesPrompt('q', ['a'])).not.toContain('SymPy')
@@ -354,6 +452,63 @@ describe('marking working line by line', () => {
     expect(m.summary).toContain('line 3')
     expect(marksFromSympy([], 2).summary).toMatch(/aren’t ones SymPy can check/)
   })
+  const claude = (lines: [boolean | null, string][], verdict: 'correct' | 'partial' | 'wrong', summary = 'Line 2 is wrong.'): Marked => ({
+    lines: lines.map(([ok, note]) => ({ ok, note })),
+    verdict,
+    summary,
+    misconception: { name: 'Dropping a term', text: 'A term was lost.' },
+    by: 'claude'
+  })
+  const sympy = (...s: (StepStatus | 'follows')[]): StepCheck[] => s.map((x) => (x === 'follows' ? { status: 'ok', why: '', follows: true } : { status: x, why: x === 'bad' ? "it isn't equal to the line before" : '' }))
+
+  it('keeps a cross only where SymPy proved the step wrong; any other cross becomes a question', () => {
+    const m = settleMarks(claude([[true, ''], [false, 'The −4h is missing.'], [false, 'Not simplified.'], [false, 'Wrong.']], 'partial'), sympy('unknown', 'bad', 'unknown', 'follows'), false)
+    expect(m.lines).toEqual([
+      { ok: true, note: '' },
+      { ok: false, note: 'The −4h is missing.' },
+      { ok: null, note: 'Not simplified.', doubt: true },
+      // SymPy proved it equal to the line before: Claude's cross was wrong
+      { ok: true, note: 'Checked exactly: it equals the line before.' }
+    ])
+    // Without the final answer proved, Claude's verdict stands
+    expect(m).toMatchObject({ verdict: 'partial', summary: 'Line 2 is wrong.', misconception: { name: 'Dropping a term' } })
+    expect(m.finalExact).toBeUndefined()
+    // A step SymPy proved wrong is crossed even when Claude passed it
+    expect(settleMarks(claude([[true, ''], [true, '']], 'correct'), sympy('unknown', 'bad'), false).lines[1]).toEqual({ ok: false, note: "It isn't equal to the line before." })
+    // An "ok" from the line's own = signs alone doesn't prove it follows: still a question
+    expect(settleMarks(claude([[true, ''], [false, 'Wrong start.']], 'wrong'), sympy('unknown', 'ok'), false).lines[1]).toMatchObject({ ok: null, doubt: true })
+  })
+
+  it('never lets a queried line take down a final answer SymPy proved right', () => {
+    const m = settleMarks(claude([[true, ''], [false, 'Looks like a slip.'], [true, '']], 'partial'), sympy('unknown', 'unknown', 'unknown'), true)
+    expect(m.verdict).toBe('correct')
+    expect(m.lines[1]).toEqual({ ok: null, note: 'Looks like a slip.', doubt: true })
+    expect(m.misconception).toBeUndefined()
+    expect(m.finalExact).toBe(true)
+    expect(m.summary).toBe('Your final answer is right: SymPy checked it against the solution. Line 2 may be worth another look, but nothing there was shown to be wrong.')
+    expect(settleMarks(claude([[false, 'a'], [false, 'b'], [true, '']], 'wrong'), sympy('unknown', 'unknown', 'unknown'), true).summary).toContain('Lines 1 and 2 may be worth')
+    // A step proved wrong may still cost a mark, but a right final answer is never "wrong"
+    expect(settleMarks(claude([[true, ''], [false, 'x']], 'wrong'), sympy('unknown', 'bad'), true).verdict).toBe('partial')
+    expect(settleMarks(claude([[true, ''], [false, 'x']], 'partial'), sympy('unknown', 'bad'), true).verdict).toBe('partial')
+    // Already correct: Claude's own words stay
+    expect(settleMarks(claude([[true, ''], [true, '']], 'correct', 'All good.'), null, true)).toMatchObject({ verdict: 'correct', summary: 'All good.' })
+  })
+
+  it('holds the tutor to a working kept correct, and tells it which lines were only queried', () => {
+    const marks = settleMarks(claude([[true, ''], [false, 'Looks like a slip.']], 'partial'), sympy('unknown', 'unknown'), true)
+    const { body, note } = workingMessage({ kind: 'steps', pages: [], lines: ['2x=4', 'x=2'].map((latex) => ({ latex, page: 0, box: null })), marks })
+    expect(note).toContain('line 2 ? (queried, not shown wrong: never mark it down for this) Looks like a slip.')
+    expect(note).toContain('SymPy checked their final answer against the solution: it is right.')
+    expect(note).toContain('Verdict: "correct"')
+    const msg = `Answer: ${body}\n\n(Tide: ${note})`
+    expect(keptCorrect(msg, 'partial')).toBe(true)
+    expect(keptCorrect(msg, 'correct')).toBe(false)
+    // Not proved right, or a step proved wrong: the tutor's mark stands
+    const unproved = workingMessage({ kind: 'steps', pages: [], lines: [{ latex: 'x=2', page: 0, box: null }], marks: { ...marks, finalExact: undefined } })
+    expect(keptCorrect(`Answer: ${unproved.body}\n\n(Tide: ${unproved.note})`, 'partial')).toBe(false)
+    expect(keptCorrect('Answer: 42', 'partial')).toBe(false)
+  })
+
   it('carries the marks into the lesson in a note the learner never sees, and back out for the transcript', () => {
     const lines = parseTranscription(REPLY, 2)!
     const marks = parseLineMarks('{"lines":[{"n":1,"ok":true,"note":"ok"},{"n":2,"ok":false,"note":"−4h dropped"},{"n":3,"ok":true},{"n":4,"ok":true}],"verdict":"partial","summary":"Nearly."}', 4)!
@@ -387,7 +542,15 @@ vi.mock('../src/main/ai', () => ({
   }
 }))
 vi.mock('../src/main/modelIdle', () => ({ loaded: async () => false }))
-vi.mock('../src/main/calculator', () => ({ checkSteps: async (lines: string[]) => lines.map((_, i) => (i === 1 ? { status: 'bad', why: "it isn't equal to the line before" } : { status: 'unknown', why: '' })) }))
+const steps = { bad: 1 }
+vi.mock('../src/main/calculator', () => ({ checkSteps: async (lines: string[]) => lines.map((_, i) => (i === steps.bad ? { status: 'bad', why: "it isn't equal to the line before" } : { status: 'unknown', why: '' })) }))
+const finals: string[] = []
+vi.mock('../src/main/lessonGuard', () => ({
+  finalExact: async (solution: string, answer: string) => {
+    finals.push(`${solution} | ${answer}`)
+    return { result: solution.trim() === answer.replace(/^x=/, '').trim() ? 'match' : 'mismatch', theirs: answer, expected: solution }
+  }
+}))
 vi.mock('../src/main/usageLog', () => ({ withUsage: (_s: unknown, fn: () => unknown) => fn() }))
 vi.mock('../src/main/claudeEngine', () => ({
   ClaudeUnavailable: class extends Error {},
@@ -422,5 +585,26 @@ describe('the answer box’s model work (main/mathsAnswers)', async () => {
     expect(marked.marks).toMatchObject({ by: 'claude', verdict: 'wrong' })
     expect(claudeCalls[1].role).toBe('mark')
     expect(claudeCalls[1].prompt).toContain('line 2: NOT equal')
+  })
+  it('with Claude: its cross on a line SymPy couldn’t check is a question, and a final answer SymPy proved right stays correct', async () => {
+    route.who = 'claude'
+    steps.bad = -1
+    finals.length = 0
+    claudeReply = '{"lines":[{"n":1,"ok":true,"note":""},{"n":2,"ok":false,"note":"Should be 2x = 4."},{"n":3,"ok":true}],"verdict":"partial","summary":"Line 2 slips.","misconception":{"name":"Moving terms","description":"x"}}'
+    const right = await m.markWorking({ question: 'Solve 2x+3=7 <solution>2</solution>', lines: ['2x+3=7', '2x=7-3', 'x=2'] })
+    expect(finals).toEqual(['2 | x=2'])
+    expect(right.marks).toMatchObject({ by: 'claude', verdict: 'correct', finalExact: true })
+    expect(right.marks.lines[1]).toEqual({ ok: null, note: 'Should be 2x = 4.', doubt: true })
+    expect(right.marks.misconception).toBeUndefined()
+    // The final answer isn't the solution's: Claude's verdict stands, its unproved cross still a question
+    const wrong = await m.markWorking({ question: '<solution>3</solution>', lines: ['2x+3=7', '2x=7-3', 'x=2'] })
+    expect(wrong.marks).toMatchObject({ verdict: 'partial' })
+    expect(wrong.marks.finalExact).toBeUndefined()
+    expect(wrong.marks.lines[1].doubt).toBe(true)
+    // No solution to check against: no final check at all
+    finals.length = 0
+    await m.markWorking({ question: 'Solve 2x+3=7', lines: ['2x+3=7', 'x=2'] })
+    expect(finals).toEqual([])
+    steps.bad = 1
   })
 })
