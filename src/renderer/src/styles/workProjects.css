@@ -232,3 +232,77 @@
   padding-left: 18px;
   line-height: 1.7;
 }
+
+/* Work through a new task: paste a request from work (components/WorkProjects NewTask) */
+.wk-sp {
+  flex: 1;
+}
+.wk-new {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-soft);
+  vertical-align: 1px;
+}
+.wk-new-task {
+  margin-bottom: 14px;
+  padding: 16px 18px;
+  border-radius: var(--r-box, 10px);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  background: var(--sunk);
+}
+.wk-nt-head h4 {
+  margin: 0 0 4px;
+  font-size: var(--t-base, 14px);
+}
+.wk-nt-head p {
+  margin: 0 0 12px;
+  max-width: 64ch;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.wk-nt-text {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--bg, var(--paper));
+  color: var(--ink);
+  font: 14px/1.55 var(--serif);
+}
+.wk-nt-text:focus,
+.wk-nt-from:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+.wk-nt-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.wk-nt-from {
+  flex: 0 1 280px;
+  min-width: 180px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--bg, var(--paper));
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.wk-nt-note {
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font-size: var(--t-meta, 12px);
+}

@@ -146,7 +146,8 @@ const EXPECTED: Record<string, string | null> = {
   projectReady: 'hard',
   projectReadyMark: 'mark',
   projectDebrief: 'hard',
-  projectIdeas: 'teach'
+  projectIdeas: 'teach',
+  workTask: 'hard'
 }
 
 describe('the routing table', () => {

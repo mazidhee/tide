@@ -81,6 +81,7 @@ const JOB_EFFORT: Record<JobName, Effort> = {
   projectDebrief: 'medium',
   projectIdeas: 'low',
   companyPrep: 'medium',
+  workTask: 'high',
   readAlong: 'medium',
   readTogether: 'medium',
   readChallenge: 'medium',

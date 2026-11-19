@@ -23,6 +23,7 @@ export const workApi: WorkApi = {
   view: invoke('work:view'),
   answer: invoke('work:answer'),
   prepare: invoke('work:prepare'),
+  fromRequest: invoke('work:fromRequest'),
   finding: invoke('work:finding'),
   stepDone: invoke('work:stepDone'),
   run: invoke('work:run'),

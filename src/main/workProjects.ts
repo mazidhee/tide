@@ -10,6 +10,8 @@
  * - Code/Work/<slug>/                   your workspace: the queries and pipelines you write
  * - Code/Work/<slug>/Summary.md         the summary written at the end
  * - .tide/work-projects/<slug>.json     where you are: the step, your answers, what was revealed
+ *
+ * A new request from work (shared/workTask) is drafted into Projects/Work/<slug>.md by draftFromRequest.
  */
 import { ipcMain } from 'electron'
 import { existsSync, promises as fs } from 'fs'
@@ -18,6 +20,7 @@ import { askDecision, cardOf, commitDecision, newState, noteLearner, parseWorkPr
 import type { McpTool } from './tideMcp'
 import { cardIndex, coverFor, lockDefence, noteBuilder, noteCheck, noteRun, setFinding, stepCards, tickCover, type FlightState } from '@shared/flightPlan'
 import type { FlightApi, WorkRun } from '@shared/workProject'
+import type { WorkTaskRequest } from '@shared/workTask'
 
 export const WORK_DIR = 'Projects/Work'
 const STATE_DIR = '.tide/work-projects'
@@ -442,7 +445,30 @@ const flight: { [K in keyof FlightApi]: (...args: Parameters<FlightApi[K]>) => R
   }
 }
 
+// ---------- Work through a new task ----------
+
+/** A request pasted from work, drafted into a project file in Projects/Work; never overwrites one */
+export async function draftFromRequest(req: WorkTaskRequest): Promise<{ slug: string; title: string }> {
+  const { checkRequest, finishWorkTask, freeSlug, workTaskPrompt, WORK_TASK_SYSTEM } = await import('@shared/workTask')
+  const bad = checkRequest(req)
+  if (bad) throw new Error(bad)
+  const { practiceCollections } = await import('./practiceStack')
+  const practice = practiceCollections().map((c) => ({ name: c.name }))
+  const { completeFor } = await import('./ai')
+  const reply = await completeFor('workTask', workTaskPrompt(req, practice, new Date().toISOString().slice(0, 10)), WORK_TASK_SYSTEM, { task: 'planning' })
+  const done = finishWorkTask(reply, req, Date.now())
+  if ('error' in done) throw new Error(`${done.error} Try again, or add more of the request.`)
+  const { absPath } = await vault()
+  await fs.mkdir(absPath(WORK_DIR), { recursive: true })
+  const taken = [...(await allWorkProjects()).map((x) => x.project.slug), ...(await fs.readdir(absPath(WORK_DIR))).map((n) => n.replace(/\.md$/, ''))]
+  const slug = freeSlug(done.project.title, taken)
+  const md = done.md.replace(/^---\n/, `---\nslug: ${slug}\n`)
+  await fs.writeFile(absPath(`${WORK_DIR}/${slug}.md`), md, { flag: 'wx' })
+  return { slug, title: done.project.title }
+}
+
 export function registerWork(): void {
+  ipcMain.handle('work:fromRequest', (_e, req: WorkTaskRequest) => draftFromRequest({ text: String(req?.text ?? ''), from: req?.from ? String(req.from) : undefined }))
   for (const [name, fn] of Object.entries(flight)) ipcMain.handle(`work:${name}`, (_e, ...args: unknown[]) => (fn as (...a: unknown[]) => unknown)(...args))
   ipcMain.handle('work:list', () => listWork())
   ipcMain.handle('work:view', (_e, slug: string) => viewOf(String(slug ?? '')))
