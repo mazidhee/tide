@@ -2,7 +2,7 @@
 
 Comprehension lives **inside the book first**. Reading a book in Tide's reader is already the reading half of a comprehension lesson, so when the learner turns it on for a book, the check comes to them in the reading flow: at the end of a chapter (or every section), a quiet card asks them to say what they just read, without showing it again, grades it against that section's exact words and lights the caught, missed and wrong words in the book itself. The separate **Comprehension** view (Learn's mode) stays for texts that are not books on the shelf: next, fresh passages pulled carefully from the open web, matched to what the learner is studying. Built a little per session; each increment ships on its own.
 
-Order: (1) foundation (built) · (2) in the book (built) · (3) fresh texts from the web · (4) argument map · (5) going beyond the text · (6) genre and level · (7) speed and retention · (8) course evidence and chosen passages · (9) polish. Every step from (4) on works in both places: the reader's inline card and the Comprehension view.
+Order: (1) foundation (built) · (2) in the book (built) · (3) fresh texts from the web (built: Wikipedia, Gutenberg, arXiv) · (4) argument map (built) · (5) going beyond the text · (6) genre and level · (7) speed and retention · (8) course evidence and chosen passages · (9) polish. Every step from (4) on works in both places: the reader's inline card and the Comprehension view.
 
 Shape of the code, so later increments slot in:
 
@@ -40,7 +40,10 @@ Acceptance: with the toggle off (the default) no card is drawn; on, the card app
 
 Measure: how many books have checks on; how often a card is answered versus skipped, per frequency; words per minute from real reading against increment 1's timed reads; the grading wait felt inline; whether "Look again" is used.
 
-## 3. Fresh texts from the web
+## 3. Fresh texts from the web (built for Wikipedia, Project Gutenberg and arXiv)
+
+Built: `shared/compWeb.ts` (sites, licences and credits, a page as paragraphs, `cutWebPassage`, `verbatimIn`), `main/compWeb.ts` (fetching, the cache in `.tide/comprehension/web/`, `findWebPassage`), `startLesson({ from: 'web', site, topic })` with the book as the fallback and the lesson's `note` saying why, `components/comprehension/Credit.tsx` (shown with the passage in every step), the fresh-text card on the Comprehension home and the source choice in Learn's Comprehension mode. Wikipedia and arXiv are read through their APIs (their terms invite programs; their robots.txt rules are for crawlers); Gutenberg's files and catalogue through the polite fetcher, from Project Gutenberg's own mirror (PGLAF) when the site is down, with classics by theme (`GUTENBERG_CLASSICS`) when its search finds nothing. arXiv is asked once more after a 429, then the learner is told to wait. Not built yet: open essays and magazines (`READING_SOURCES`), Opus naming candidate works, the paywall check on HTML pages (the three sites have none).
+
 
 For the Comprehension view: passages the learner has not chosen, pulled from the open web, close to what they are working on. In the learner's words: texts "that align with the broader theme of what I'm doing… you really need to think about and be careful with." Designed now, built next session.
 
@@ -72,7 +75,10 @@ Acceptance: every passage shown passes the verbatim check against its fetched pa
 
 Measure: how often a fresh text is found versus the fallback, and why it fell back (robots, paywall, verbatim, nothing on topic); fetch and cut time; topic fit (the learner's "was this on what you're doing?"); scores on web passages against book passages; passages later found not verbatim (should be zero).
 
-## 4. Map how it argues
+## 4. Map how it argues (built)
+
+Built: step `map` between `review` and `words` (`MapStep.tsx`), `MapEditor.tsx` (the editor, the two maps side by side, the rubric), the optional "Map how it argued" in the in-book card, the job `comprehensionMap` (role `mark`), `MAP_FIELDS`, `mapPrompt`, `parseMapReply`, `MAP_RUBRIC` in `shared/comprehension.ts`, `compareMap` and `mapSelfCheck` in main. One Opus call writes the reference map and compares; the background prep while the learner reads is not built yet.
+
 
 Adds: a step after the summary: a small structured editor for claim, reasons (each with its evidence), assumptions and the turn; for narrative and literature: what happens, who, the turn, what it means. Opus writes a reference map (started in the background while the learner reads) and compares field by field (matches / partly / missing / off), anchored to the passage. Review shows both maps side by side. In the book: an optional second part of the inline card ("Map how it argued"), offered after the summary's feedback, never required. No-Claude: the reference is not available, so a rubric self-check.
 

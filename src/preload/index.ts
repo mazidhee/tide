@@ -513,7 +513,10 @@ const api: TideApi = {
     cards: invoke('comp:cards'),
     lookup: invoke('comp:lookup'),
     inBook: invoke('comp:inBook'),
-    bookChecks: invoke('comp:bookChecks')
+    bookChecks: invoke('comp:bookChecks'),
+    webTopic: invoke('comp:webTopic'),
+    map: invoke('comp:map'),
+    mapSelf: invoke('comp:mapSelf')
   },
   writing: {
     list: invoke('writing:list'),

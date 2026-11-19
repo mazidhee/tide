@@ -583,7 +583,7 @@ export default function App() {
   else if (view.kind === 'projects') main = <ProjectsPage />
   else if (view.kind === 'work') main = <FlightPlan key={view.slug} slug={view.slug} />
   else if (view.kind === 'writing') main = view.path ? <WritingPiece key={`${view.path}:${view.nonce ?? ''}`} path={view.path} talk={!!view.talk} review={!!view.review} /> : <WritingView />
-  else if (view.kind === 'comprehension') main = <ComprehensionView key={view.lesson ?? 'home'} lesson={view.lesson} />
+  else if (view.kind === 'comprehension') main = <ComprehensionView key={view.lesson ?? `home${view.fresh?.nonce ?? ''}`} lesson={view.lesson} fresh={view.fresh} />
   else if (view.kind === 'courses') main = <CoursesView key={view.id ?? ''} id={view.id} lesson={view.lesson} area={view.area} />
   else if (view.kind === 'workshop') main = <WorkshopView key={`${view.id ?? ''}:${view.from?.topic ?? ''}:${view.nonce ?? ''}`} id={view.id} from={view.from} />
   else if (view.kind === 'new-topic') main = <NewTopicView key={view.nonce ?? 'new'} initial={view.topic} initialGoal={view.goal} auto={view.auto} />

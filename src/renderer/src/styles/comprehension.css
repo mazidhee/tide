@@ -875,3 +875,669 @@ button.cp-next:hover {
   font: 500 12.5px/1.3 var(--rr-ui);
   color: var(--rp-soft);
 }
+
+/* ---------- Fresh texts from the web: where each passage came from ---------- */
+
+/* A site's own mark: Wikipedia's and arXiv's drawn through a mask in their colour, Gutenberg's as it is */
+.cp-mark {
+  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+}
+.cp-mark.s-wikipedia,
+.cp-mark.s-arxiv {
+  -webkit-mask: var(--src) center / contain no-repeat;
+  mask: var(--src) center / contain no-repeat;
+}
+.cp-mark.s-wikipedia {
+  background: var(--ink);
+}
+/* arXiv's red, lifted towards the ink on dark themes so it stays legible */
+.cp-mark.s-arxiv {
+  background: color-mix(in srgb, #b31b1b 82%, var(--ink));
+}
+.cp-mark.s-gutenberg {
+  background: var(--src) center / contain no-repeat;
+}
+
+/* The credit under a passage: site, work, licence, and that it is quoted exactly */
+.cp-credit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 6px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.cp-credit + .cp-after {
+  margin-top: 18px;
+  border-top: 0;
+  padding-top: 0;
+}
+.cp-credit.center {
+  justify-content: center;
+  border-top: 0;
+  padding-top: 0;
+  margin: -2px 0 22px;
+}
+.cp-credit a {
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong, var(--line));
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cp-credit a:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+.cp-credit-src {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.cp-credit-src .cp-mark {
+  margin-top: 2px;
+}
+.cp-credit-terms {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.cp-credit:not(.center) .cp-credit-terms::before {
+  content: '·';
+  color: var(--line-strong, var(--ink-muted));
+}
+.cp-credit.center {
+  flex-direction: column;
+  gap: 4px;
+}
+.cp-credit.center .cp-credit-src {
+  text-align: center;
+  max-width: 520px;
+}
+.cp-credit-sep {
+  color: var(--line-strong, var(--ink-muted));
+}
+.cp-credit-exact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+}
+.cp-credit-exact svg {
+  color: var(--accent);
+}
+
+/* Why it isn't the passage asked for */
+.cp-note {
+  margin: 0 0 22px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--cp-fill);
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Home: a fresh text on a topic */
+.cp-fresh {
+  margin-top: 30px;
+}
+.cp-fresh-lede {
+  margin: 2px 0 12px;
+  color: var(--ink-muted);
+  font-size: 13.5px;
+}
+.cp-fresh-card {
+  display: grid;
+  gap: 16px;
+  padding: 16px 20px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-raised);
+}
+.cp-fresh-topic {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  transition: border-color 0.2s;
+}
+.cp-fresh-topic:focus-within {
+  border-bottom-color: var(--accent);
+}
+.cp-fresh-topic > span {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+.cp-fresh-topic input {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  font-family: var(--cp-serif);
+  font-size: 21px;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.cp-fresh-topic input::placeholder {
+  color: var(--ink-muted);
+  opacity: 0.7;
+  font-style: italic;
+}
+.cp-fresh-sites {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.cp-fresh-sites button {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 1px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: pointer;
+  transition:
+    box-shadow 0.15s,
+    background-color 0.15s;
+}
+.cp-fresh-sites button:hover {
+  background: var(--bg-hover);
+}
+.cp-fresh-sites button[aria-checked='true'] {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.cp-fresh-sites button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cp-fresh-sites button[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+.cp-fresh-sites .cp-mark {
+  grid-row: span 2;
+  width: 18px;
+  height: 18px;
+}
+.cp-fresh-site-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.cp-fresh-site-what {
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cp-fresh-go {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cp-fresh-status {
+  margin-right: auto;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+.cp-fresh-card[aria-busy='true'] .cp-fresh-status {
+  animation: ib-breathe 2.4s ease-in-out infinite;
+}
+.cp-fresh-status.miss {
+  color: var(--ink-soft);
+}
+.cp-past-title .cp-mark {
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
+}
+@media (max-width: 640px) {
+  .cp-fresh-sites {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Learn › Comprehension: what a fresh text is, under its topic */
+.lrn-comp-source {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+/* ---------- Map how it argues (MapStep, MapEditor; in the book too) ---------- */
+
+.cp-body.cp-mapstep:not(.narrow) {
+  grid-template-columns: minmax(0, 560px) minmax(0, 520px);
+  column-gap: 44px;
+  align-items: start;
+}
+.cp-mapstep:not(.narrow) .mp-passage-col {
+  position: sticky;
+  top: 72px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+}
+.cp-mapstep .cp-passage {
+  font-size: calc(var(--cp-size, 20px) * 0.9);
+}
+.cp-mapstep.narrow .mp-col {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.mp-lede {
+  margin: -4px 0 22px;
+  color: var(--ink-muted);
+  font-size: 13.5px;
+}
+.cp-passage mark.cp-pt.v-partly {
+  text-decoration-style: dashed;
+  text-decoration-color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.mp-editor,
+.mp-compared,
+.mp-rubric {
+  --m-ink: var(--ink);
+  --m-soft: var(--ink-muted);
+  --m-line: var(--line);
+  --m-line-strong: var(--line-strong, var(--line));
+  --m-hover: var(--bg-hover);
+  --m-face: var(--cp-serif, var(--read-face));
+  --m-ui: inherit;
+  --m-page: var(--bg);
+}
+.mp-editor.in-book,
+.mp-compared.in-book,
+.mp-rubric.in-book {
+  --m-ink: var(--rp-ink);
+  --m-soft: var(--rp-soft);
+  --m-line: var(--rp-line);
+  --m-line-strong: var(--rp-line-strong);
+  --m-hover: var(--rp-hover);
+  --m-face: var(--read-face);
+  --m-ui: var(--rr-ui);
+  --m-page: transparent;
+}
+
+/* What kind of passage: a small two-way switch */
+.mp-kind {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0 0 18px;
+  padding: 2px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--m-line);
+  font-family: var(--m-ui);
+}
+.mp-kind button {
+  all: unset;
+  padding: 4px 11px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--m-soft);
+  cursor: pointer;
+}
+.mp-kind button:hover {
+  color: var(--m-ink);
+}
+.mp-kind button[aria-checked='true'] {
+  background: color-mix(in srgb, var(--m-ink) 8%, transparent);
+  color: var(--m-ink);
+  font-weight: 600;
+}
+.mp-kind button:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.mp-kind button[disabled] {
+  cursor: default;
+}
+
+/* The spine: a quiet line down the left, a node at each part */
+.mp-spine {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 24px;
+}
+.mp-spine::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 9px;
+  bottom: 22px;
+  border-left: 1px solid var(--m-line-strong);
+}
+.mp-part {
+  position: relative;
+  padding-bottom: 20px;
+}
+.mp-part::before {
+  content: '';
+  position: absolute;
+  left: -23px;
+  top: 5px;
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1.5px solid var(--m-soft);
+  background: var(--m-page);
+}
+.mp-editor.in-book .mp-part::before {
+  background: var(--rp-day, var(--bg));
+}
+.mp-editor .mp-part.main::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.mp-part:focus-within::before {
+  border-color: var(--accent);
+}
+.mp-label {
+  display: block;
+  margin-bottom: 2px;
+  font: 600 12.5px/1.4 var(--m-ui);
+  color: var(--m-soft);
+}
+.mp-write {
+  all: unset;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 1.6em;
+  padding: 3px 0 6px;
+  border-bottom: 1px solid var(--m-line);
+  font: 400 17px/1.55 var(--m-face);
+  color: var(--m-ink);
+  white-space: pre-wrap;
+  field-sizing: content;
+  overflow: hidden;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  transition: border-color 0.2s;
+}
+.mp-write.main {
+  font-size: 20px;
+  line-height: 1.45;
+}
+.mp-write.small {
+  font-size: 15px;
+  color: var(--m-ink);
+  border-bottom-style: dashed;
+}
+.mp-write::placeholder {
+  color: var(--m-soft);
+  opacity: 0.75;
+  font-style: italic;
+}
+.mp-write:focus {
+  border-bottom-color: var(--accent);
+  border-bottom-style: solid;
+}
+.mp-write:disabled {
+  cursor: default;
+  border-bottom-color: transparent;
+}
+.mp-editor.in-book .mp-write {
+  font-size: 1em;
+}
+.mp-editor.in-book .mp-write.main {
+  font-size: 1.06em;
+}
+.mp-editor.in-book .mp-write.small {
+  font-size: 0.92em;
+}
+.mp-reasons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.mp-reason {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: start;
+}
+.mp-n {
+  padding-top: 6px;
+  font: 500 12px/1.4 var(--m-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--m-soft);
+}
+.mp-backing {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 2px;
+}
+.mp-backing-label {
+  flex: none;
+  font: italic 400 12.5px/1.4 var(--m-ui);
+  color: var(--m-soft);
+}
+.mp-remove {
+  all: unset;
+  width: 22px;
+  height: 22px;
+  margin-top: 4px;
+  border-radius: 6px;
+  text-align: center;
+  line-height: 22px;
+  color: var(--m-soft);
+  cursor: pointer;
+}
+.mp-remove:hover {
+  background: var(--m-hover);
+  color: var(--m-ink);
+}
+.mp-add {
+  all: unset;
+  margin-top: 8px;
+  padding: 2px 0;
+  font: 500 13px/1.4 var(--m-ui);
+  color: var(--m-soft);
+  cursor: pointer;
+}
+.mp-add:hover {
+  color: var(--m-ink);
+}
+.mp-add:focus-visible,
+.mp-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The two maps side by side, part by part */
+.mp-compared {
+  container-type: inline-size;
+  margin-top: 6px;
+  border-top: 1px solid var(--m-line);
+}
+.mp-cmp-head,
+.mp-cmp-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 16px;
+}
+.mp-cmp-head {
+  padding: 8px 6px 6px;
+  border-bottom: 1px solid var(--m-line);
+  font: 500 12px/1.4 var(--m-ui);
+  color: var(--m-soft);
+}
+.mp-cmp-row {
+  row-gap: 4px;
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--m-line);
+  border-radius: 4px;
+  transition: background-color 0.12s;
+}
+.mp-cmp-row.lights {
+  cursor: pointer;
+}
+.mp-cmp-row.lights:hover,
+.mp-cmp-row.on {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.mp-cmp-label {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font: 400 12.5px/1.4 var(--m-ui);
+}
+.mp-cmp-label b {
+  display: block;
+  font-weight: 600;
+  color: var(--m-ink);
+}
+.mp-verdict {
+  display: block;
+  color: var(--m-soft);
+}
+.mp-rule {
+  flex: none;
+  width: 12px;
+  height: 0;
+  transform: translateY(-3px);
+  border-bottom: 2px solid var(--m-soft);
+}
+.mp-rule.v-caught {
+  border-bottom-color: var(--accent);
+}
+.mp-rule.v-partly {
+  border-bottom-color: var(--accent);
+  border-bottom-style: dashed;
+}
+.mp-rule.v-missed {
+  border-bottom-style: dashed;
+}
+.mp-rule.v-wrong {
+  border-bottom-style: dotted;
+  border-bottom-width: 3px;
+  border-bottom-color: var(--m-ink);
+}
+.mp-cmp-yours p,
+.mp-cmp-theirs p {
+  margin: 0 0 4px;
+  font: 400 15.5px/1.5 var(--m-face);
+  color: var(--m-ink);
+}
+.mp-cmp-theirs p {
+  color: color-mix(in srgb, var(--m-ink) 78%, transparent);
+}
+.mp-compared.in-book .mp-cmp-yours p,
+.mp-compared.in-book .mp-cmp-theirs p {
+  font-size: 0.92em;
+}
+p.mp-blank {
+  font-style: italic;
+  color: var(--m-soft);
+}
+.mp-cmp-note {
+  grid-column: 2 / -1;
+  margin: 2px 0 0;
+  font: 400 13px/1.5 var(--m-ui);
+  color: var(--m-soft);
+}
+/* Narrow: each part's two answers one above the other, named */
+@container (max-width: 520px) {
+  .mp-cmp-head {
+    display: none;
+  }
+  .mp-cmp-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mp-cmp-note {
+    grid-column: 1;
+  }
+  .mp-cmp-yours::before,
+  .mp-cmp-theirs::before {
+    display: block;
+    font: 500 11.5px/1.4 var(--m-ui);
+    color: var(--m-soft);
+  }
+  .mp-cmp-yours::before {
+    content: 'Yours';
+  }
+  .mp-cmp-theirs::before {
+    content: 'The passage’s';
+  }
+}
+
+.mp-rubric {
+  border: 0;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-family: var(--m-ui);
+}
+.mp-rubric legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m-soft);
+}
+.mp-tick {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--m-ink);
+  cursor: pointer;
+}
+.mp-tick:hover {
+  background: var(--m-hover);
+}
+.mp-tick input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+/* In the book: the map below the feedback, inside the same card */
+.ib-map {
+  margin-top: 1em;
+  padding-top: 0.9em;
+  border-top: 1px solid var(--rp-line);
+}
+.ib-points + .ib-map {
+  border-top: 0;
+  padding-top: 0.6em;
+}
+.ib-map .mp-editor {
+  margin-top: 0.4em;
+}
+.ib-map.done .mp-compared {
+  margin-top: 0.6em;
+}
+.ib-map-offer {
+  margin-right: auto;
+}
