@@ -231,7 +231,10 @@ export function LiveMockCall({
       return
     }
     if (text) {
-      const at = typedText ? elapsed() - Math.min(elapsed(), Math.round((typedText.split(/\s+/).length / 150) * 60_000)) : start
+      // Typed: timed as if said at 150 words a minute, but never before the interviewer stopped
+      const prev = linesRef.current[linesRef.current.length - 1]
+      const floor = prev ? (prev.end ?? prev.at) : 0
+      const at = typedText ? Math.max(floor, elapsed() - Math.round((typedText.split(/\s+/).length / 150) * 60_000)) : Math.max(floor, start)
       push({
         who: 'you',
         text,
