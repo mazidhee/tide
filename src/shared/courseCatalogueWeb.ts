@@ -24,6 +24,8 @@ const QE = {
   licenceNote: 'CC BY-SA 4.0, as every QuantEcon lecture site states; the notebooks are read from QuantEcon’s .notebooks repository',
   kind: 'course' as const
 }
+/** Wikisource's and PLOS's page furniture: language links, the EPUB download, categories, a journal's subject-area feedback */
+const WIKISOURCE_PLOS_CLEAN = ['^(add languages|\\d+ languages?|add links|download|from wikisource|loading metrics|hidden categories:?|subject areas|thanks for your feedback\\.?)$', '^retrieved from ', '^is the subject area .* applicable to this article\\?']
 const PERSONAL_SITE = 'All rights reserved or no licence stated: read on this Mac for your own study, never passed on'
 
 export const WEB_COURSES: CatalogueCourse[] = [
@@ -787,5 +789,42 @@ export const WEB_COURSES: CatalogueCourse[] = [
     covers: 'Strang’s famous course: systems of equations, vector spaces, orthogonality and least squares, determinants, eigenvalues, positive definite matrices and the SVD',
     level: 'beginner',
     topics: ['linear algebra', 'matrices', 'eigenvalues', 'eigenvectors', 'least squares', 'svd', 'vector spaces', 'determinants']
+  },
+
+  // ---------- Reading and philosophy ----------
+  // Rewritten on 18 Nov 2026 after the first copy was lost. Every page answered 200 and its site's
+  // robots.txt allows it; none needs a login. The texts are read in the editions named, so every
+  // quotation a lesson makes is the source's own words, from that translation.
+  {
+    id: 'reading-difficult-texts',
+    source: 'docs',
+    url: 'https://www.jimpryor.net/teaching/guidelines/reading.html',
+    title: 'Reading difficult texts: philosophy, Nietzsche and academic papers',
+    by: 'Paul N. Edwards, Jim Pryor, the Stanford Encyclopedia of Philosophy, S. Keshav, Michael Mitzenmacher and John P. A. Ioannidis, with Plato (tr. Benjamin Jowett) and Nietzsche (tr. Horace B. Samuel and Helen Zimmern) from Wikisource',
+    area: 'reading',
+    licence: 'Mixed: Edwards CC BY-NC-SA 4.0; Pryor CC BY-NC-ND; the Stanford Encyclopedia of Philosophy (all rights reserved); Keshav and Mitzenmacher (all rights reserved); Ioannidis CC BY; Plato and Nietzsche in public-domain translations',
+    tier: 'personal',
+    licenceNote: 'Several of its readings are non-commercial or all rights reserved: read on this Mac for your own study, never passed on',
+    covers: 'How to read what resists you: reading for structure before detail, reconstructing a philosopher’s argument, Nietzsche’s Genealogy and Beyond Good and Evil read slowly with the Stanford Encyclopedia beside them, and Keshav’s three passes through a research paper, practised on a real one',
+    kind: 'guide',
+    level: 'intermediate',
+    topics: ['reading difficult texts', 'close reading', 'reading philosophy', 'philosophy', 'nietzsche', 'genealogy of morals', 'beyond good and evil', 'reading papers', 'academic papers', 'research papers', 'how to read a paper', 'argument reconstruction', 'critical reading', 'primary texts'],
+    pages: [
+      { title: 'How to read a book (Paul N. Edwards)', url: 'https://pne.people.si.umich.edu/PDF/howtoread.pdf', module: 'Reading for structure' },
+      { title: 'Guidelines on reading philosophy (Jim Pryor)', url: 'https://www.jimpryor.net/teaching/guidelines/reading.html', module: 'Reading philosophy' },
+      { title: 'Distinctions and definitions (Jim Pryor)', url: 'https://www.jimpryor.net/teaching/vocab/definitions.html' },
+      { title: 'Philosophical arguments (Jim Pryor)', url: 'https://www.jimpryor.net/teaching/vocab/arguments.html' },
+      { title: 'Euthyphro (Plato, tr. Benjamin Jowett): reconstruct its arguments', url: 'https://en.wikisource.org/wiki/Euthyphro_(Jowett)' },
+      { title: 'Friedrich Nietzsche (Stanford Encyclopedia of Philosophy)', url: 'https://plato.stanford.edu/entries/nietzsche/', module: 'Reading Nietzsche' },
+      { title: 'The Genealogy of Morals: Preface (tr. Horace B. Samuel)', url: 'https://en.wikisource.org/wiki/The_Genealogy_of_Morals/Preface' },
+      { title: 'The Genealogy of Morals: First Essay, Good and Evil, Good and Bad', url: 'https://en.wikisource.org/wiki/The_Genealogy_of_Morals/First_Essay' },
+      { title: 'Beyond Good and Evil: Preface (tr. Helen Zimmern)', url: 'https://en.wikisource.org/wiki/Beyond_Good_and_Evil/Preface' },
+      { title: 'Beyond Good and Evil: Prejudices of Philosophers', url: 'https://en.wikisource.org/wiki/Beyond_Good_and_Evil/Chapter_I' },
+      { title: 'Nietzsche’s moral and political philosophy (Stanford Encyclopedia of Philosophy)', url: 'https://plato.stanford.edu/entries/nietzsche-moral-political/' },
+      { title: 'How to read a paper (S. Keshav)', url: 'https://web.stanford.edu/class/ee384m/Handouts/HowtoReadPaper.pdf', module: 'Reading academic papers' },
+      { title: 'How to read a research paper (Michael Mitzenmacher)', url: 'https://www.eecs.harvard.edu/~michaelm/postscripts/ReadPaper.pdf' },
+      { title: 'Why most published research findings are false (John P. A. Ioannidis): read it in three passes', url: 'https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124' }
+    ],
+    clean: { drop: WIKISOURCE_PLOS_CLEAN }
   }
 ]

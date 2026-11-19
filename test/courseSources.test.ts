@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import { asciidocMarkdown, captionSegments, gate, mystMarkdown, neverHost, parseJbToc, parseRobots, refusesAi, robotsAllow, tierOfLicence, transcriptMarkdown } from '@shared/courseSource'
 import { allCourses, catalogueCourse, CATALOGUE, fromRepo, homeUrl, mediaOf, registerCourses, sourceOf, sourceSite, unregisterCourse, type CatalogueCourse } from '@shared/courseCatalogue'
 import { WEB_COURSES } from '@shared/courseCatalogueWeb'
-import { jbOutline, lessonSections } from '@shared/courses'
+import { jbOutline, lessonSections, suggestCourses } from '@shared/courses'
 import { politeFetcher, SourceRefused, type Fetcher } from '../src/main/courseSources/fetcher'
 import { flatten, htmlToMarkdown, parseHtml, parseToc } from '../src/main/courseSources/html'
 import { lectureNumber, ocw, ocwNav, ocwResources, ocwVideo } from '../src/main/courseSources/ocw'
@@ -155,6 +155,15 @@ describe('the web catalogue', () => {
     for (const a of ['payments', 'blockchain', 'quant', 'econ']) expect(by(a), a).toBeGreaterThanOrEqual(5)
     for (const s of ['ocw', 'yale', 'jupyterbook', 'site', 'youtube', 'docs']) expect(WEB_COURSES.some((c) => sourceOf(c) === s), s).toBe(true)
     expect(WEB_COURSES.some((c) => mediaOf(c) === 'video')).toBe(true)
+  })
+  it('has a course on reading difficult texts: method, philosophy, Nietzsche in named translations, and papers', () => {
+    const c = WEB_COURSES.find((x) => x.id === 'reading-difficult-texts')!
+    expect(c.area).toBe('reading')
+    expect(guidePlan(c).map((m) => m.title)).toEqual(['Reading for structure', 'Reading philosophy', 'Reading Nietzsche', 'Reading academic papers'])
+    // Quotations are only as exact as the edition: the translators are named
+    for (const t of ['Benjamin Jowett', 'Horace B. Samuel', 'Helen Zimmern']) expect(c.by).toContain(t)
+    expect(suggestCourses('I want to learn to read Nietzsche').map((x) => x.id)).toContain('reading-difficult-texts')
+    expect(suggestCourses('how to read academic papers').map((x) => x.id)).toContain('reading-difficult-texts')
   })
   it('takes courses found at run time into the catalogue, and lets them go', () => {
     const c: CatalogueCourse = { id: 'found-x', source: 'youtube', playlist: 'PL0123456789abcdefghij', title: 'X', by: 'Y', area: 'econ', licence: 'Standard YouTube licence', tier: 'personal', licenceNote: 'n', covers: 'c', kind: 'course', level: 'beginner', topics: ['x'] }
