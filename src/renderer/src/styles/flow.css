@@ -21,6 +21,9 @@
   --k-queue: var(--series-2);
   --k-external: var(--ink-muted);
   --k-note: var(--warn);
+  --k-concept: var(--cv-c6);
+  --k-example: var(--series-3);
+  --k-question: var(--series-4);
   --cv-surface: var(--bg);
   --cv-card: var(--bg-raised);
   --cv-rule: color-mix(in srgb, var(--ink) 13%, transparent);
@@ -223,13 +226,22 @@
 .k-note {
   --kind: var(--k-note);
 }
+.k-concept {
+  --kind: var(--k-concept);
+}
+.k-example {
+  --kind: var(--k-example);
+}
+.k-question {
+  --kind: var(--k-question);
+}
 .k-file,
 .k-group {
   --kind: var(--ink-soft);
 }
 
 /* A part with a kind carries a thin bar of its colour along the left: the eye finds the databases */
-.cvn.cvn-text:not(.k-plain):not(.k-note)::before {
+.cvn.cvn-text:not(.k-plain):not(.k-note):not(.k-concept)::before {
   content: '';
   position: absolute;
   left: -1px;
@@ -239,6 +251,23 @@
   border-radius: 0 3px 3px 0;
   background: var(--kind);
   opacity: 0.85;
+}
+
+/* A concept map's idea: a pill with the words centred, its colour all round rather than a bar */
+.cvn.k-concept {
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px 20px;
+  border-color: color-mix(in srgb, var(--k-concept) 45%, var(--cv-rule));
+  background: color-mix(in srgb, var(--k-concept) 7%, var(--cv-card));
+}
+.cvn.k-concept .cvn-title {
+  font-weight: 600;
+}
+.cvn.k-question {
+  border-style: dashed;
 }
 
 /* A plain box (a flowchart step, an Obsidian card): the words, centred */
@@ -678,6 +707,33 @@
   cursor: grabbing;
 }
 
+.cv-pal-sets {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+
+.cv-pal-sets button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.cv-pal-sets button.on {
+  background: var(--cv-card);
+  color: var(--ink);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
 .cv-pal-rule {
   height: 1px;
   margin: 4px 6px;
@@ -1075,6 +1131,11 @@
   padding: 5px;
 }
 
+.cv.narrow .cv-pal-sets {
+  flex-direction: column;
+}
+
+.cv.narrow .cv-pal-sets span,
 .cv.narrow .cv-pal > span:not(.cvn-icon) {
   display: none;
 }

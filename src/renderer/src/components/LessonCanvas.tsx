@@ -6,7 +6,8 @@ import { Icon } from './Icon'
 import { useCanvasFiles, newEdges } from './flow/canvasFiles'
 
 /**
- * The canvas beside a walkthrough: the tutor draws the system as it explains it (each component as
+ * The canvas beside a lesson: diagrams and concept maps you and the tutor draw together, and in a
+ * walkthrough the system the tutor draws as it explains it (each component as
  * it appears, each connection in the order things flow), and you can move, add and correct it.
  * Each connection the tutor adds plays as it arrives: a request travels it, so you see the step
  * being explained move. It is an ordinary .canvas file, so it stays with the topic for later.

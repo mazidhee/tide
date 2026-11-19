@@ -1,13 +1,14 @@
 /**
- * System design canvases, stored as JSON Canvas (https://jsoncanvas.org), the format Obsidian
- * uses, so a design opens in Obsidian too. Tide adds a `kind` to each node (service, database,
- * queue...), which other apps ignore, and maps it to a canvas colour so it still reads there.
+ * Canvases (system designs, diagrams and concept maps), stored as JSON Canvas
+ * (https://jsoncanvas.org), the format Obsidian uses, so a canvas opens in Obsidian too. Tide adds
+ * a `kind` to each node (service, database, concept, example...), which other apps ignore, and
+ * maps it to a canvas colour so it still reads there.
  *
  * The same small set of operations is used by the editor and by the tutor's canvas_edit tool, and
  * `describeCanvas` turns a design into text the model can reason about.
  */
 
-export type ComponentKind = 'client' | 'service' | 'database' | 'cache' | 'queue' | 'lb' | 'gateway' | 'cdn' | 'storage' | 'worker' | 'external' | 'note'
+export type ComponentKind = 'client' | 'service' | 'database' | 'cache' | 'queue' | 'lb' | 'gateway' | 'cdn' | 'storage' | 'worker' | 'external' | 'note' | 'concept' | 'example' | 'question'
 
 export const COMPONENTS: { kind: ComponentKind; label: string; color: string }[] = [
   { kind: 'client', label: 'Client', color: '5' },
@@ -21,8 +22,19 @@ export const COMPONENTS: { kind: ComponentKind; label: string; color: string }[]
   { kind: 'storage', label: 'Object storage', color: '1' },
   { kind: 'cdn', label: 'CDN', color: '5' },
   { kind: 'external', label: 'External API', color: '' },
-  { kind: 'note', label: 'Note', color: '' }
+  { kind: 'note', label: 'Note', color: '' },
+  // A concept map's parts: the ideas, examples of them, and what is still open
+  { kind: 'concept', label: 'Concept', color: '6' },
+  { kind: 'example', label: 'Example', color: '4' },
+  { kind: 'question', label: 'Question', color: '3' }
 ]
+
+/** The parts of a system design, and of a concept map */
+export const SYSTEM_KINDS: ComponentKind[] = ['client', 'service', 'database', 'cache', 'queue', 'lb', 'gateway', 'worker', 'storage', 'cdn', 'external', 'note']
+export const MAP_KINDS: ComponentKind[] = ['concept', 'example', 'question', 'note']
+
+/** A canvas with no system parts on it reads as a concept map (an empty one too) */
+export const isConceptMap = (c: Canvas) => !c.nodes.some((n) => n.kind && SYSTEM_KINDS.includes(n.kind) && n.kind !== 'note')
 const KINDS = new Set(COMPONENTS.map((c) => c.kind))
 
 export type Side = 'top' | 'right' | 'bottom' | 'left'
@@ -241,7 +253,7 @@ export function findNode(c: Canvas, ref: string): CanvasNode | undefined {
 
 const kindOf = (k?: string): ComponentKind | undefined => {
   const v = String(k ?? '').toLowerCase().replace(/[^a-z]/g, '')
-  const alias: Record<string, ComponentKind> = { loadbalancer: 'lb', db: 'database', sql: 'database', nosql: 'database', redis: 'cache', kafka: 'queue', topic: 'queue', stream: 'queue', s3: 'storage', blob: 'storage', api: 'service', server: 'service', apigateway: 'gateway', user: 'client', browser: 'client', mobile: 'client', thirdparty: 'external', job: 'worker', consumer: 'worker' }
+  const alias: Record<string, ComponentKind> = { loadbalancer: 'lb', db: 'database', sql: 'database', nosql: 'database', redis: 'cache', kafka: 'queue', topic: 'queue', stream: 'queue', s3: 'storage', blob: 'storage', api: 'service', server: 'service', apigateway: 'gateway', user: 'client', browser: 'client', mobile: 'client', thirdparty: 'external', job: 'worker', consumer: 'worker', idea: 'concept', term: 'concept', definition: 'concept', instance: 'example', eg: 'example', open: 'question', ask: 'question' }
   return KINDS.has(v as ComponentKind) ? (v as ComponentKind) : alias[v]
 }
 

@@ -16,7 +16,7 @@ import {
   type NodeChange,
   type OnConnectEnd
 } from '@xyflow/react'
-import { COMPONENTS, connect, groupAround, makeNode, nodeLabel, placeNode, type Canvas, type CanvasEdge, type CanvasNode, type ComponentKind } from '@shared/canvas'
+import { COMPONENTS, isConceptMap, MAP_KINDS, SYSTEM_KINDS, connect, groupAround, makeNode, nodeLabel, placeNode, type Canvas, type CanvasEdge, type CanvasNode, type ComponentKind } from '@shared/canvas'
 import { tidyCanvas } from '@shared/flowLayout'
 import { Icon, type IconName } from './Icon'
 import { EdgeContext, EDGE_TYPES, Markers, type EdgeHooks } from './flow/FlowEdge'
@@ -31,7 +31,7 @@ interface Props {
   onExample?(): void
   /** Bumped when the canvas is replaced from outside (the tutor drew on it), to re-fit if needed */
   version: number
-  /** Beside a lesson: no palette, the drawing fitted to a narrow panel */
+  /** Beside a lesson: smaller controls, the drawing fitted to a narrow panel */
   compact?: boolean
   /** A figure in a message: look, pan, play the flow; nothing moves or changes */
   readOnly?: boolean
@@ -44,7 +44,9 @@ interface Props {
 }
 
 const GRID = 20
-const PALETTE: ComponentKind[] = ['client', 'service', 'database', 'cache', 'queue', 'lb', 'gateway', 'worker', 'storage', 'cdn', 'external', 'note']
+// Two sets of parts: a concept map's ideas, and a system's components
+const PALETTES = { map: MAP_KINDS, system: SYSTEM_KINDS } as const
+type PaletteSet = keyof typeof PALETTES
 
 // Copy and paste between canvases in one window
 let clipboard: { nodes: CanvasNode[]; edges: CanvasEdge[] } | null = null
@@ -178,13 +180,16 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
   const [narrow, setNarrow] = useState(false)
   const narrowRef = useRef(false)
   narrowRef.current = narrow
+  // Which parts the palette offers: what's on the canvas says; an empty lesson canvas starts as a map
+  const [paletteSet, setPaletteSet] = useState<PaletteSet>(() => (canvas.nodes.length ? (isConceptMap(canvas) ? 'map' : 'system') : compact ? 'map' : 'system'))
+  const palette = PALETTES[paletteSet]
   // Fit into the room the floating controls leave: beside the palette, above the toolbar
   const fit = useCallback(
     (duration = 0) => {
       const wrap = wrapRef.current
       if (!wrap || !wrap.clientWidth) return
       const all = rf.getNodes()
-      const left = compact || readOnly ? 0 : narrowRef.current ? 64 : 176
+      const left = readOnly ? 0 : narrowRef.current ? 64 : 176
       // A figure's caption sits above the drawing while a flow plays
       const top = readOnly ? 40 : 8
       // Room for the toolbar, and in a narrow panel for the caption a playing flow shows above it
@@ -243,8 +248,8 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
   const centre = useCallback(() => {
     const wrap = wrapRef.current!
     const r = wrap.getBoundingClientRect()
-    return rf.screenToFlowPosition({ x: r.left + r.width / 2 + (compact || readOnly ? 0 : 70), y: r.top + r.height / 2 })
-  }, [rf, compact, readOnly])
+    return rf.screenToFlowPosition({ x: r.left + r.width / 2 + (readOnly ? 0 : narrowRef.current ? 32 : 70), y: r.top + r.height / 2 })
+  }, [rf, readOnly])
 
   const selectOnly = useCallback((ids: string[]) => {
     // Not drawn yet: select it when it is
@@ -575,9 +580,17 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
             <Background variant={BackgroundVariant.Dots} gap={GRID} size={1.2} className="cv-bg" />
             {minimap && !readOnly && !narrow && <MiniMap position="bottom-right" pannable zoomable className="cv-minimap" nodeClassName={(n) => `mm k-${(n as FlowNode).data.node.kind ?? (n as FlowNode).data.node.type}`} nodeBorderRadius={4} ariaLabel="Overview of the canvas" />}
 
-            {!compact && !readOnly && (
-              <Panel position="top-left" className="cv-palette" aria-label="Add a component">
-                {PALETTE.map((kind) => (
+            {!readOnly && (
+              <Panel position="top-left" className="cv-palette" aria-label="Add a part">
+                <div className="cv-pal-sets" role="radiogroup" aria-label="Parts for">
+                  {(['map', 'system'] as const).map((set) => (
+                    <button key={set} role="radio" aria-checked={paletteSet === set} className={paletteSet === set ? 'on' : ''} onClick={() => setPaletteSet(set)} title={set === 'map' ? 'Concept map: ideas, examples, questions' : 'System design: services, databases, queues'}>
+                      <KindIcon kind={set === 'map' ? 'concept' : 'service'} size={13} />
+                      <span>{set === 'map' ? 'Map' : 'System'}</span>
+                    </button>
+                  ))}
+                </div>
+                {palette.map((kind) => (
                   <button
                     key={kind}
                     className={`cv-pal k-${kind}`}
@@ -618,7 +631,7 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
               <Panel position="top-center" className="cv-inspect" aria-label="Selection">
                 {single && single.type === 'text' && (
                   <>
-                    {PALETTE.map((k) => (
+                    {(single.kind && !palette.includes(single.kind) ? [...palette, single.kind] : palette).map((k) => (
                       <button key={k} className={`cv-chip k-${k}${single.kind === k ? ' on' : ''}`} onClick={() => setKind(single.id, k)} title={kindName(k)} aria-pressed={single.kind === k}>
                         <KindIcon kind={k} size={13} />
                       </button>
@@ -704,8 +717,14 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
 
           {!canvas.nodes.length && !readOnly && (
             <div className="cv-empty">
-              <p>Sketch your design</p>
-              <p className="muted small">{compact ? 'The tutor draws here as it explains. You can add and move parts too.' : 'Drag parts in from the left, then drag from a dot to connect them. Or ask the tutor to start one with you.'}</p>
+              <p>{paletteSet === 'map' ? 'Map the ideas' : 'Sketch your design'}</p>
+              <p className="muted small">
+                {paletteSet === 'map'
+                  ? 'Add concepts from the left, drag from a dot to link two, and double-click a link to say how they relate. Or ask the tutor to draw one with you.'
+                  : compact
+                    ? 'The tutor draws here as it explains. You can add and move parts too.'
+                    : 'Drag parts in from the left, then drag from a dot to connect them. Or ask the tutor to start one with you.'}
+              </p>
               {onExample && (
                 <button className="btn small cv-example" onClick={onExample}>
                   Open a finished example

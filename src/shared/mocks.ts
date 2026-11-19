@@ -11,7 +11,7 @@
  */
 import { jsonrepair } from 'jsonrepair'
 import type { Canvas } from './canvas'
-import { compareDesigns, describeCanvas, applyCanvasOps } from './canvas'
+import { compareDesigns, describeCanvas, applyCanvasOps, nodeText } from './canvas'
 import type { HireVerdict } from './interviews'
 import type { LessonRecord, LessonTurn } from './lessonLog'
 import type { ProfileOp } from './learnerProfile'
@@ -293,7 +293,7 @@ export function annotateCanvas(canvas: Canvas, notes: MockAnnotation[]): Canvas 
   const ops: Record<string, string>[] = []
   notes.forEach((n, i) => {
     const id = `opus-note-${i + 1}`
-    const there = canvas.nodes.some((x) => x.text.split('\n')[0].toLowerCase().includes(n.node.toLowerCase()) || n.node.toLowerCase().includes(x.text.split('\n')[0].toLowerCase()))
+    const there = canvas.nodes.some((x) => nodeText(x).split('\n')[0].toLowerCase().includes(n.node.toLowerCase()) || n.node.toLowerCase().includes(nodeText(x).split('\n')[0].toLowerCase()))
     ops.push({ op: 'add', id, label: `${i + 1}. ${n.note}`, kind: 'note', ...(there ? { near: n.node, side: 'below' } : {}) })
     if (there) ops.push({ op: 'connect', from: id, to: n.node })
   })
