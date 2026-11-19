@@ -597,6 +597,40 @@ export function IdeView({ path: initialVaultPath, root: initialRoot, file: initi
     [root, testing, saveAll, toast]
   )
 
+  // ---------- A daily algorithm problem's folder (main/algoPractice): Check runs its tests and records them ----------
+  const [daily, setDaily] = useState<{ day: string; title: string; solved: boolean } | null>(null)
+  const [dailyChecking, setDailyChecking] = useState(false)
+  useEffect(() => {
+    if (!root) return setDaily(null)
+    let live = true
+    window.tide.algo
+      .forRoot(root)
+      .then((d) => live && setDaily(d))
+      .catch(() => live && setDaily(null))
+    return () => {
+      live = false
+    }
+    // A run of the Tests view counts as a check too
+  }, [root, testRun])
+  const checkDaily = useCallback(async () => {
+    if (!root) return
+    setDailyChecking(true)
+    try {
+      await saveAll()
+      const r = await window.tide.algo.check(root)
+      const outcomes = [...r.passed.map((id) => ({ id, status: 'pass' as const })), ...r.failed.map((f) => ({ id: f.name, status: 'fail' as const, message: f.why }))]
+      setTestRun({ framework: 'pytest', outcomes, output: r.error ?? '', ms: 0, ...(r.error ? { error: 'The code didn’t run.' } : {}) })
+      setOutputKind('tests')
+      setPanel('output')
+      setOutcome(r.error ? { text: 'Didn’t run', tone: 'bad' } : r.failed.length ? { text: `${r.failed.length} fail, ${r.passed.length} pass`, tone: 'bad' } : { text: 'Solved', tone: 'good' })
+      if (!r.failed.length && !r.error) toast('Solved. Every test passes: today’s problem is done.')
+    } catch (e) {
+      toast(clean(e), true)
+    } finally {
+      setDailyChecking(false)
+    }
+  }, [root, saveAll, toast])
+
   // ---------- A guided project's hidden tests (the Code folder's workshop projects) ----------
   const [project, setProject] = useState<{ id: string; state: WorkshopState | null } | null>(null)
   const [projectTesting, setProjectTesting] = useState(false)
@@ -1348,6 +1382,12 @@ export function IdeView({ path: initialVaultPath, root: initialRoot, file: initi
           </span>
         </button>
         <div className="ix-head-right no-drag">
+          {daily && (
+            <button className={`tool-btn${daily.solved ? ' on' : ''}`} onClick={() => void checkDaily()} disabled={dailyChecking} title={`Run ${daily.title}'s tests and record the result in Practice › Daily problem`}>
+              <Icon name="check" />
+              <span>{dailyChecking ? 'Checking…' : daily.solved ? 'Solved' : 'Check'}</span>
+            </button>
+          )}
           {project && (
             <button className="tool-btn" onClick={async () => {
               setProjectTesting(true)

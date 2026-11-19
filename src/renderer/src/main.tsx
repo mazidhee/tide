@@ -58,6 +58,7 @@ import './styles/threads.css'
 import './styles/explore.css'
 import './styles/breaks.css'
 import './styles/mocks.css'
+import './styles/algo.css'
 import './styles/sharp.css'
 // The reading room, its reader and cover banners on notes
 import './styles/readingRoom.css'
