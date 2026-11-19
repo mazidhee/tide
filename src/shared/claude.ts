@@ -27,5 +27,16 @@ export function claudeModel(role: ClaudeRole, s?: ClaudeSettings, lesson?: Claud
   return s?.models?.[role] ?? CLAUDE_DEFAULTS[role]
 }
 
+/**
+ * What Auto is called: the model that answered the last reply when there is one (main says, with
+ * a "model" event: Claude's model as Claude Code reports it, Gemma, or the cloud model), else the
+ * one Auto will ask first
+ */
+export function autoLabel(o: { answeredBy?: string; teaching: boolean; teachModel: string; cloudAuto: boolean; cloudName: string }): string {
+  if (o.answeredBy) return `Auto (${o.answeredBy})`
+  if (o.teaching) return `Auto (Claude ${claudeLabel(o.teachModel)})`
+  return o.cloudAuto ? `Auto (Gemma or ${o.cloudName})` : 'Gemma'
+}
+
 /** The student asks for depth in so many words: that turn goes to the "hard" model */
 export const asksForDepth = (said: string) => /\b(in (more )?depth|rigorous(ly)?|go deeper|deep dive|properly prove|prove (it|this|that)|full derivation|derive (it|this))\b/i.test(said)

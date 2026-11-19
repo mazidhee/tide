@@ -62,6 +62,132 @@ export function routeOf(p: Pick<WorkProjectPublic, 'steps' | 'decisions'>, s: Fl
   return { stops, legs, stepsDone: p.steps.filter((x) => x.n < s.step).length, steps: p.steps.length, checkpointsDone: p.decisions.filter((d) => s.committed[d.id]).length, checkpoints: p.decisions.length }
 }
 
+/**
+ * The map's sizes in CSS pixels (styles/flightPlan.css): centre-to-centre room a stretch needs per
+ * checkpoint and at least between two steps, the widths of a step's and a checkpoint's label, the
+ * space kept between two labels, and how far a label may reach past the route's ends.
+ */
+export const MAP_SIZES = { cpGap: 40, stepGap: 64, label: 118, cpLabel: 150, room: 12, overhang: 64 }
+
+export interface MapLabel {
+  /** The label's centre, which leans inwards near the ends */
+  x: number
+  w: number
+  side: 'up' | 'down'
+}
+
+export interface MapLayout {
+  /** The route's length: the width given, or more when its stops can't fit without touching */
+  width: number
+  /** Each stop's centre */
+  xs: number[]
+  labels: (MapLabel | null)[]
+}
+
+/**
+ * Where each stop sits on a route `width` long, and where its label goes, so no two markers and no
+ * two labels touch. Steps and the destination are evenly spaced; a stretch whose checkpoints need
+ * more room than that takes it from the roomier stretches, and the checkpoints share their stretch
+ * evenly. Step labels alternate below and above the line (a selected checkpoint's takes whichever
+ * side is free). When even that can't fit, the route grows (and the map scrolls) rather than overlap.
+ */
+export function mapLayout(stops: Stop[], width: number, o: { labels?: boolean; selected?: string } = {}): MapLayout {
+  const S = MAP_SIZES
+  const n = stops.length
+  if (!n) return { width: Math.max(0, width), xs: [], labels: [] }
+  const anchors = stops.map((s, i) => (s.kind !== 'checkpoint' || i === 0 || i === n - 1 ? i : -1)).filter((i) => i >= 0)
+  const needs = anchors.slice(1).map((a, j) => Math.max(S.stepGap, (a - anchors[j]) * S.cpGap))
+  const place = (w: number): MapLayout => {
+    // The stretches that need more than an even share get what they need; the rest share what's left
+    const sizes: number[] = needs.map(() => 0)
+    let open = needs.map((_, j) => j)
+    let free = w
+    for (;;) {
+      const share = free / Math.max(1, open.length)
+      const tight = open.filter((j) => needs[j] > share)
+      if (!tight.length) {
+        for (const j of open) sizes[j] = share
+        break
+      }
+      for (const j of tight) (sizes[j] = needs[j]), (free -= needs[j])
+      open = open.filter((j) => !tight.includes(j))
+      if (!open.length) break
+    }
+    const xs: number[] = new Array(n).fill(0)
+    let at = 0
+    anchors.forEach((a, j) => {
+      xs[a] = at
+      if (j === anchors.length - 1) return
+      const next = anchors[j + 1]
+      for (let i = a + 1; i < next; i++) xs[i] = at + (sizes[j] * (i - a)) / (next - a)
+      at += sizes[j]
+    })
+    const total = Math.max(w, at)
+    if (n === 1) xs[0] = total / 2
+    const labels: (MapLabel | null)[] = new Array(n).fill(null)
+    if (o.labels === false) return { width: total, xs, labels }
+    const lean = (x: number, lw: number) => Math.min(total + S.overhang - lw / 2, Math.max(lw / 2 - S.overhang, x))
+    const clear = (l: MapLabel) => labels.every((m) => !m || m.side !== l.side || Math.abs(m.x - l.x) >= (m.w + l.w) / 2 + S.room)
+    // Below, above, below…; a label whose side is taken by its neighbour's takes the other side when that's free
+    let last: 'up' | 'down' = 'up'
+    stops.forEach((s, i) => {
+      if (s.kind === 'checkpoint') return
+      const want: MapLabel = { x: lean(xs[i], S.label), w: S.label, side: last === 'up' ? 'down' : 'up' }
+      const other: MapLabel = { ...want, side: want.side === 'up' ? 'down' : 'up' }
+      labels[i] = clear(want) || !clear(other) ? want : other
+      last = labels[i]!.side
+    })
+    const c = stops.findIndex((s) => s.kind === 'checkpoint' && s.key === o.selected)
+    if (c >= 0) {
+      const up: MapLabel = { x: lean(xs[c], S.cpLabel), w: S.cpLabel, side: 'up' }
+      labels[c] = clear(up) ? up : { ...up, side: 'down' }
+    }
+    return { width: total, xs, labels }
+  }
+  // Grow the route until every label has its own room
+  let w = Math.max(1, width)
+  for (let k = 0; k < 80; k++) {
+    const l = place(w)
+    const shown = l.labels.filter((x): x is MapLabel => !!x)
+    if (shown.every((a, i) => shown.every((b, j) => i === j || a.side !== b.side || Math.abs(a.x - b.x) >= (a.w + b.w) / 2 + MAP_SIZES.room - 0.01))) return l
+    w = l.width * 1.08
+  }
+  return place(w)
+}
+
+/** The result chart's bar labels: the gap between bars and an upper bound on a character's width (10.5px text), in CSS pixels */
+export const BAR_SIZES = { gap: 6, char: 6.4, room: 8 }
+
+/** Every how many bars the result chart writes a label, so each one it writes shows in full: the first, then every k-th */
+export function barLabelEvery(labels: string[], width: number): number {
+  const n = labels.length
+  if (n <= 1 || width <= 0) return 1
+  const pitch = (width + BAR_SIZES.gap) / n
+  const longest = Math.max(...labels.map((l) => l.length)) * BAR_SIZES.char
+  // A label held against an edge moves towards its neighbour, so check the real places and widen if need be
+  for (let k = Math.max(1, Math.ceil((longest + BAR_SIZES.room) / pitch)); k < n; k++) {
+    const spans = labels.flatMap((t, i) => (i % k ? [] : [barLabelSpan(i, n, t, width)]))
+    if (spans.every((s, i) => i === 0 || s[0] >= spans[i - 1][1] + BAR_SIZES.room)) return k
+  }
+  return n
+}
+
+/** The left and right ends of bar k's label */
+export function barLabelSpan(k: number, n: number, text: string, width: number): [number, number] {
+  const p = barLabelPlace(k, n, text, width)
+  const w = text.length * BAR_SIZES.char
+  return p.anchor === 'start' ? [p.x, p.x + w] : p.anchor === 'end' ? [p.x - w, p.x] : [p.x - w / 2, p.x + w / 2]
+}
+
+/** Where bar k's label goes: centred under its bar, or held against the chart's edge so it isn't cut off */
+export function barLabelPlace(k: number, n: number, text: string, width: number): { x: number; anchor: 'start' | 'middle' | 'end' } {
+  const centre = ((k + 0.5) * (width + BAR_SIZES.gap)) / n - BAR_SIZES.gap / 2
+  const half = (text.length * BAR_SIZES.char) / 2
+  if (centre - half < 0) return { x: 0, anchor: 'start' }
+  if (centre + half > width) return { x: width, anchor: 'end' }
+  return { x: centre, anchor: 'middle' }
+}
+
 // ---------- What they add on the way ----------
 
 export function setFinding(s: FlightState, step: number, text: string, now = 0): FlightState {

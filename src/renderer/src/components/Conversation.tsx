@@ -122,6 +122,8 @@ export function useConversation() {
   const [loading, setLoading] = useState(false)
   const [web, setWebState] = useState(() => localStorage.getItem('tide.chat.web') !== 'off')
   const activeId = useRef<string | null>(null)
+  // The model that answered the last reply, for the picker's Auto
+  const [answeredBy, setAnsweredBy] = useState<string>()
   const chatIdRef = useRef(chatId)
   chatIdRef.current = chatId
   // Each turn's data lab is its conversation's: TurnView reads it from here (see lib/lab.ts)
@@ -136,6 +138,7 @@ export function useConversation() {
   useEffect(
     () =>
       window.tide.ai.onEvent((e) => {
+        if (e.type === 'model' && e.id === activeId.current) setAnsweredBy(e.model)
         setTurns((list) =>
           list.map((t) => {
             if (t.id !== e.id) return t
@@ -231,7 +234,7 @@ export function useConversation() {
   }, [])
 
   const busy = turns.some((t) => t.streaming)
-  return { chatId, turns, summarized, loading, busy, web, setWeb, load, reset, send, stop }
+  return { chatId, turns, summarized, loading, busy, web, setWeb, load, reset, send, stop, answeredBy }
 }
 
 /** The professor beside each answer, acting out what the tutor is doing right now */
@@ -483,10 +486,12 @@ interface ComposerProps {
   large?: boolean
   /** Extra controls on the left of the toolbar, e.g. what to answer from */
   tools?: React.ReactNode
+  /** Who answered the last reply, for the model picker */
+  answeredBy?: string
 }
 
 /** The message box: text, then a toolbar with the scope, the Web switch and send or stop */
-export function Composer({ value, onChange, onSend, busy, onStop, web, onWeb, attachment, onClearAttachment, placeholder, inputRef, large, tools }: ComposerProps) {
+export function Composer({ value, onChange, onSend, busy, onStop, web, onWeb, attachment, onClearAttachment, placeholder, inputRef, large, tools, answeredBy }: ComposerProps) {
   const own = useRef<HTMLTextAreaElement>(null)
   const ref = inputRef ?? own
   const max = large ? 280 : 180
@@ -550,7 +555,7 @@ export function Composer({ value, onChange, onSend, busy, onStop, web, onWeb, at
       <div className="composer-bar">
         <div className="composer-tools">
           {tools}
-          <EnginePill />
+          <EnginePill answeredBy={answeredBy} />
           <button type="button" className="pill" title="Add a screenshot or a photo (or paste or drop one in)" aria-label="Add a picture" onClick={() => picker.current?.click()}>
             <Icon name="image" size={13} />
           </button>

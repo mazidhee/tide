@@ -610,6 +610,8 @@ export type ChatEvent =
   /** A lesson reply is written: the student can answer while its checks finish */
   | { id: string; type: 'replied' }
   | { id: string; type: 'step'; step: AgentStep }
+  /** Who is answering this turn, as the model picker names it: "Claude Haiku", "Gemma", a cloud model's name */
+  | { id: string; type: 'model'; model: string }
   | { id: string; type: 'done' }
   | { id: string; type: 'error'; message: string }
 

@@ -7,8 +7,8 @@
  * answer and commit first, then what was decided appears beside your answer. Everything happens here;
  * there is no separate lesson for a work project.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { lanesOf, routeOf, type BuilderComparison, type Lane, type LaneState, type Route, type Stop } from '@shared/flightPlan'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { barLabelEvery, barLabelPlace, lanesOf, mapLayout, routeOf, type BuilderComparison, type Lane, type LaneState, type Route, type Stop } from '@shared/flightPlan'
 import type { WorkRun, WorkView } from '@shared/workProject'
 import type { BuilderGuide } from '@shared/builderMap'
 import { useApp } from '../state'
@@ -38,7 +38,19 @@ const ChartIcon = () => (
 // ---------- The route ----------
 
 function RouteMap({ title, route, big, selected, onStop, onProgress, onOverview, here }: { title: string; route: Route; big: boolean; selected: string; here: number; onStop(s: Stop): void; onProgress(): void; onOverview(): void }) {
-  let stepIx = 0
+  // The room the route has (the map less its margins), measured; the layout keeps every stop and label apart in it
+  const box = useRef<HTMLDivElement>(null)
+  const [room, setRoom] = useState(900)
+  useEffect(() => {
+    const map = box.current?.parentElement
+    if (!map) return
+    const measure = () => setRoom(Math.max(120, map.clientWidth - 144))
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(map)
+    return () => ro.disconnect()
+  }, [])
+  const layout = useMemo(() => mapLayout(route.stops, room, { labels: big, selected }), [route, room, big, selected])
   return (
     <div className={`fp-map ${big ? 'big' : 'small'}`}>
       <div className="fp-top">
@@ -59,63 +71,50 @@ function RouteMap({ title, route, big, selected, onStop, onProgress, onOverview,
           </button>
         )}
       </div>
-      <div className="fp-route" role="list" aria-label="Route">
-        {(() => {
-          // Each step, then a stretch to the next stop holding that step's checkpoints: the stops sit evenly spaced however many checkpoints a step has
-          const out: ReactElement[] = []
-          const stops = route.stops
-          let i = 0
-          while (i < stops.length) {
-            const s = stops[i]
-            const sel = selected === s.key ? ' sel' : ''
-            if (s.kind === 'step') {
-              const up = stepIx++ % 2 === 1
-              out.push(
-                <div key={s.key} role="listitem" className={`fp-stn ${s.state}${sel}${up ? ' up' : ''}`}>
-                  <button className="fp-o" onClick={() => onStop(s)} aria-label={`Step ${s.n}: ${s.label}`} title={s.label}>
-                    {s.state === 'done' ? <Icon name="check" size={12} /> : s.n}
-                  </button>
-                  <span className="fp-lab">
+      <div ref={box} className="fp-route" role="list" aria-label="Route" style={{ width: layout.width }}>
+        {route.stops.slice(1).map((_, i) => (
+          <div key={`l${i}`} className={`fp-leg${route.legs[i] ? ' done' : ''}`} style={{ left: layout.xs[i], width: layout.xs[i + 1] - layout.xs[i] }} />
+        ))}
+        {route.stops.map((s, i) => {
+          const sel = selected === s.key ? ' sel' : ''
+          const l = layout.labels[i]
+          const lab = (text: ReactNode) =>
+            l && (
+              <span className={`fp-lab ${l.side}`} style={{ width: l.w, left: `calc(50% + ${l.x - layout.xs[i]}px)` }}>
+                {text}
+              </span>
+            )
+          const at = { left: layout.xs[i] }
+          if (s.kind === 'step')
+            return (
+              <div key={s.key} role="listitem" className={`fp-stn ${s.state}${sel}`} style={at}>
+                <button className="fp-o" onClick={() => onStop(s)} aria-label={`Step ${s.n}: ${s.label}`} title={s.label}>
+                  {s.state === 'done' ? <Icon name="check" size={12} /> : s.n}
+                </button>
+                {lab(
+                  <>
                     {s.label}
                     {s.n === here && <span className="fp-youare">You are here</span>}
-                  </span>
-                </div>
-              )
-            } else if (s.kind === 'destination') {
-              out.push(
-                <div key={s.key} role="listitem" className={`fp-dest ${s.state}${sel}`}>
-                  <button className="fp-o" onClick={() => onStop(s)} aria-label="Defend it">
-                    <FlagIcon />
-                  </button>
-                  <span className="fp-lab">{s.label}</span>
-                </div>
-              )
-              break
-            }
-            // The stretch after this stop: its checkpoints, each between legs
-            const parts: ReactElement[] = [<div key={`l${i}`} className={`fp-leg${route.legs[i] ? ' done' : ''}`} />]
-            let j = i + 1
-            while (j < stops.length && stops[j].kind === 'checkpoint') {
-              const c = stops[j] as Extract<Stop, { kind: 'checkpoint' }>
-              const csel = selected === c.key ? ' sel' : ''
-              parts.push(
-                <div key={c.key} role="listitem" className={`fp-cpw ${c.state}${csel}`}>
-                  <button className="fp-cp" onClick={() => onStop(c)} aria-label={`Checkpoint ${c.id}: ${c.label}`} title={`${c.id}. ${c.label}`} />
-                  {csel && <span className="fp-lab">{c.label}</span>}
-                </div>,
-                <div key={`l${j}`} className={`fp-leg${route.legs[j] ? ' done' : ''}`} />
-              )
-              j++
-            }
-            out.push(
-              <div key={`seg${i}`} className="fp-seg-run">
-                {parts}
+                  </>
+                )}
               </div>
             )
-            i = j
-          }
-          return out
-        })()}
+          if (s.kind === 'destination')
+            return (
+              <div key={s.key} role="listitem" className={`fp-dest ${s.state}${sel}`} style={at}>
+                <button className="fp-o" onClick={() => onStop(s)} aria-label="Defend it">
+                  <FlagIcon />
+                </button>
+                {lab(s.label)}
+              </div>
+            )
+          return (
+            <div key={s.key} role="listitem" className={`fp-cpw ${s.state}${sel}`} style={at}>
+              <button className="fp-cp" onClick={() => onStop(s)} aria-label={`Checkpoint ${s.id}: ${s.label}`} title={`${s.id}. ${s.label}`} />
+              {lab(s.label)}
+            </div>
+          )
+        })}
       </div>
       <div className="fp-legend">
         <span>
@@ -167,6 +166,17 @@ export function ResultTable({ run, flag }: { run: WorkRun | null; flag?: (row: u
 
 /** A bar for each row, from the first numeric column: the shape of the result at a glance */
 function ResultChart({ run }: { run: WorkRun | null }) {
+  const bars = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const el = bars.current
+    if (!el) return
+    const measure = () => setWidth(el.clientWidth)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  })
   const col = run && !run.error && run.rows.length > 1 ? run.columns.findIndex((_, k) => k > 0 && run.rows.every((r) => r[k] === null || isNum(r[k]))) : -1
   if (!run || col < 0) return <div className="fp-mb"><div className="fp-mb-h">Chart</div><div className="fp-emptybox">{run && !run.error && run.rows.length === 1 ? 'One row: a number card, not a chart.' : 'The chart draws from your result.'}</div></div>
   const rows = run.rows.slice(0, 24)
@@ -184,7 +194,7 @@ function ResultChart({ run }: { run: WorkRun | null }) {
         {run.columns[col]}
         <span>by {run.columns[0]}</span>
       </div>
-      <div className="fp-bars">
+      <div ref={bars} className="fp-bars">
         {vals.map((v, k) => (
           <div key={k} className="fp-bar" title={`${label(rows[k][0])}: ${fmt(rows[k][col])}`}>
             <span className="v">{fmt(rows[k][col])}</span>
@@ -193,9 +203,20 @@ function ResultChart({ run }: { run: WorkRun | null }) {
         ))}
       </div>
       <div className="fp-blabels">
-        {rows.map((r, k) => (
-          <span key={k}>{label(r[0])}</span>
-        ))}
+        {(() => {
+          // Whole labels only: as many as fit, the first and then every k-th, the end ones held inside the chart
+          const texts = rows.map((r) => label(r[0]))
+          const every = barLabelEvery(texts, width)
+          return texts.map((t, k) => {
+            if (k % every) return null
+            const p = barLabelPlace(k, texts.length, t, width)
+            return (
+              <span key={k} className={p.anchor} style={{ left: p.x }}>
+                {t}
+              </span>
+            )
+          })
+        })()}
       </div>
     </div>
   )

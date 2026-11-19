@@ -229,6 +229,7 @@ export function ChatPage({ id }: { id?: string }) {
 
   const composer = (
     <Composer
+      answeredBy={convo.answeredBy}
       value={input}
       onChange={setInput}
       onSend={() => send()}

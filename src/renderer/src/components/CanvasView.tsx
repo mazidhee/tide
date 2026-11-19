@@ -225,7 +225,7 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
                 <TurnView key={t.id} turn={t} />
               ))}
             </div>
-            <Composer value={input} onChange={setInput} onSend={() => send(input)} busy={convo.busy} onStop={convo.stop} web={convo.web} onWeb={convo.setWeb} placeholder="Ask about your design" />
+            <Composer answeredBy={convo.answeredBy} value={input} onChange={setInput} onSend={() => send(input)} busy={convo.busy} onStop={convo.stop} web={convo.web} onWeb={convo.setWeb} placeholder="Ask about your design" />
           </aside>
         )}
       </div>
