@@ -845,6 +845,9 @@ export function FlightPlan({ slug }: { slug: string }) {
   const results = useRef<Record<number, WorkRun>>({})
   const [, bump] = useState(0)
 
+  // The app's toast, kept by ref: a toast changes the app context, and loading again on that would toast again
+  const toast = useRef(app.toast)
+  toast.current = app.toast
   useEffect(() => {
     window.tide.work
       .view(slug)
@@ -852,12 +855,12 @@ export function FlightPlan({ slug }: { slug: string }) {
         setV(x)
         setSel(`s${Math.min(x.state.step, Math.max(...x.project.steps.map((s) => s.n)))}`)
       })
-      .catch((e) => (app.toast(clean(e), { tone: 'error' }), setV(null)))
+      .catch((e) => (toast.current(clean(e), { tone: 'error' }), setV(null)))
     window.tide.practiceData
       .status()
       .then((s) => setRunning(s.running && s.metabase === 'ready' && s.setUp))
       .catch(() => setRunning(false))
-  }, [slug, app])
+  }, [slug])
 
   const route = useMemo(() => (v ? routeOf(v.project, v.state) : null), [v])
   if (v === undefined) return <div className="page" />
