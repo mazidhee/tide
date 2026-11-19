@@ -14,11 +14,11 @@ export function WorkingCard({ working }: { working: WorkingMarks }) {
       <ol className="wc-lines">
         {working.lines.map((l, i) => {
           const m = marks.lines[i]
-          const st = m?.ok === true ? 'ok' : m?.ok === false ? 'bad' : 'none'
+          const st = m?.ok === true ? 'ok' : m?.ok === false ? 'bad' : m?.doubt ? 'doubt' : 'none'
           return (
             <li key={i} className={`wc-line ${st}`}>
-              <span className="wc-mark" aria-label={st === 'ok' ? 'Right' : st === 'bad' ? 'Wrong' : 'Not marked'}>
-                {st === 'ok' ? '✓' : st === 'bad' ? '✗' : i + 1}
+              <span className="wc-mark" aria-label={st === 'ok' ? 'Right' : st === 'bad' ? 'Wrong' : st === 'doubt' ? 'Queried, not shown to be wrong' : 'Not marked'}>
+                {st === 'ok' ? '✓' : st === 'bad' ? '✗' : st === 'doubt' ? '?' : i + 1}
               </span>
               <div>
                 <Tex latex={l.latex} className="wc-tex" />

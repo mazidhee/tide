@@ -6,12 +6,15 @@
  *
  * Requests:
  *   {"id", "op": "eval", "parts": [...], "ops": [...]}   a value, an equation to solve, or a truth
- *   {"id", "op": "chain", "lines": [{"parts", "ops"}]}   each step of a working against the last
- * A check that runs past its few seconds is "unknown", never "wrong": a false mismatch would
- * overturn a correct mark.
+ *   {"id", "op": "chain", "lines": [{"parts", "ops"}], "log10"?}   each step of a working against the
+ *       last: ok, bad or unknown, and whether it was proved equal to the line before ("follows")
+ * A step is "bad" only when that is certain. A check that runs past its few seconds, or a gap that
+ * rounding, a domain, a branch, a case or a value put in could explain, is "unknown", never
+ * "wrong": a false mismatch would overturn a correct mark.
  */
 export const CALC_WORKER = String.raw`
 import sys, json, signal, random
+import re as _re  # sympy's * brings its own re (the real part)
 try:
     from sympy import *
     from sympy.core.function import AppliedUndef
@@ -46,8 +49,12 @@ NS = {}
 exec("from sympy import *", NS)
 NS.update({"_rad": _rad, "_deg": _deg, "_root": _root, "_det": _det, "_transpose": _transpose, "_times": _times})
 
-def ev(code):
-    v = eval(code, NS)
+# The same names with an unmarked log read as base 10 (main/calculator tries it before calling a step wrong)
+NS_LOG10 = dict(NS)
+NS_LOG10["log"] = lambda a, b=None: log(a, 10 if b is None else b)
+
+def ev(code, ns=None):
+    v = eval(code, ns or NS)
     return v if isinstance(v, MatrixBase) else sympify(v)
 
 def done(e):
@@ -124,54 +131,136 @@ def evaluate(parts, ops):
     return {"kind": "truth", "exact": "\\text{true}" if truth else ("\\text{false}" if truth is False else "\\text{can't tell}"), "numeric": None, "text": str(truth)}
 
 # ---------- steps ----------
+# A step is called wrong only when that is certain: anything rounding, a domain, a branch, a case
+# or a substitution could explain is "can't tell". Missing a slip costs less than a false cross.
+
+DECIMAL = _re.compile(r'Rational\("-?\d*\.(\d+)"\)')
+WRITTEN = _re.compile(r'^\(?-?(?:Integer\(\d+\)|Rational\("\d*\.?(\d*)"\))\)?$')
+
+def places(code):
+    """The fewest decimal places of a decimal written in this part, or None when it has none"""
+    ps = [len(m.group(1)) for m in DECIMAL.finditer(code or "")]
+    return min(ps) if ps else None
+
+def written(code):
+    """A part that is just a number as written (5, -0.667): its decimal places, else None"""
+    m = WRITTEN.match((code or "").replace(" ", ""))
+    return None if not m else len(m.group(1) or "")
 
 def undefined(e):
     if isinstance(e, MatrixBase): return False
     return bool(e.atoms(AppliedUndef))
 
-def same(a, b):
-    """True, False or None (can't tell): two values equal"""
+def close(x, y):
+    return abs(x - y) <= Float("1e-9", 30) * Max(1, abs(x), abs(y))
+
+def numbers_differ(a, b, ca, cb):
+    """Two numbers simplify couldn't show equal: False only when rounding can't explain the gap"""
+    x, y = N(a, 30), N(b, 30)
+    if not (x.is_number and y.is_number and x.is_finite and y.is_finite): return None
+    gap = abs(x - y)
+    if close(x, y): return None
+    # 2/3 = 0.667, 2/3 = 0.66 and 2000/3 = 667: the written number is the other one rounded or cut
+    # short, to one unit in its last place; 1/2 = 0.6 is wrong (0.5 needs no rounding)
+    for code, other in ((ca, b), (cb, a)):
+        p = written(code)
+        if p is None: continue
+        if (other * Integer(10) ** p).is_Integer: continue
+        if gap <= Rational(1, 10 ** p) * (1 + Rational(1, 10 ** 9)): return None
+    # Decimals inside the working (0.33 + 0.33 + 0.33 = 1): rounded earlier, so close is not wrong
+    ps = [p for p in (places(ca), places(cb)) if p is not None]
+    if ps and gap <= Rational(1, 10 ** min(ps)) * Max(1, abs(x), abs(y)): return None
+    return False
+
+def differs_at_points(a, b, syms):
+    """Two expressions shown different where they are real: at positive points (so no log, root or
+    branch question arises), never agreeing anywhere tried, and different at a whole number too
+    (sin(n pi) = 0 holds for every whole n)"""
+    rng = random.Random(7)
+    points = []
+    for _ in range(2): points.append(({s: Rational(rng.randint(1, 9), rng.randint(10, 19)) for s in syms}, False))
+    for _ in range(3): points.append(({s: Rational(rng.randint(20, 90), rng.randint(7, 11)) for s in syms}, False))
+    for _ in range(3): points.append(({s: Integer(rng.randint(2, 7)) for s in syms}, True))
+    real, whole_differs = 0, False
+    for sub, whole in points:
+        try:
+            x, y = N(a.subs(sub), 30), N(b.subs(sub), 30)
+        except Exception:
+            continue
+        if not (x.is_real and y.is_real and x.is_finite and y.is_finite): continue
+        real += 1
+        if close(x, y): return None
+        if whole: whole_differs = True
+    return False if real >= 4 and whole_differs else None
+
+def same(a, b, ca="", cb=""):
+    """True, False or None (can't tell): two values equal. ca and cb are the parts as written"""
     a, b = done(a), done(b)
     if isinstance(a, MatrixBase) or isinstance(b, MatrixBase):
         if not (isinstance(a, MatrixBase) and isinstance(b, MatrixBase)): return None
-        if a.shape != b.shape: return False
-        return (a - b).applyfunc(simplify).is_zero_matrix
+        if a.shape != b.shape:
+            # A row for a column: written another way, not wrong
+            if a.shape == b.T.shape: return None
+            return False
+        z = (a - b).applyfunc(simplify).is_zero_matrix
+        if z: return True
+        return False if z is False and not (free(a) or free(b)) and places(ca) is None and places(cb) is None else None
     if undefined(a) or undefined(b) or unevaluated(a) or unevaluated(b): return None
-    d = simplify(a - b)
-    if d == 0: return True
-    t = a.equals(b)
-    if t is True: return True
-    if t is False:
-        # Confirmed at random points before it's called wrong
-        syms = list(free(a) | free(b))
-        misses = 0
-        for _ in range(4):
-            sub = {s: Rational(random.randint(-90, 90), random.randint(7, 19)) for s in syms}
-            try:
-                x, y = complex(N(a.subs(sub))), complex(N(b.subs(sub)))
-            except Exception:
-                continue
-            if abs(x - y) > 1e-8 * max(1, abs(x), abs(y)): misses += 1
-        return False if misses >= 2 else None
-    return None
+    if simplify(a - b) == 0: return True
+    if a.equals(b) is True: return True
+    # Not the same letters: a value put in (3x^2 - 4, then 3(2)^2 - 4), a constant of integration
+    # (x^2 + C), units: not a claim that the two are the same
+    if free(a) != free(b): return None
+    if not free(a): return numbers_differ(a, b, ca, cb)
+    if places(ca) is not None or places(cb) is not None: return None
+    return differs_at_points(a, b, sorted(free(a), key=str))
 
-def same_eq(l1, r1, l2, r2):
+def solved(l, r):
+    """x = 3: a lone letter on one side, a number on the other"""
+    return (l.is_Symbol and not free(r)) or (r.is_Symbol and not free(l))
+
+def real_roots(l, r, s):
+    """The real solutions SymPy finds, or None when it can't say which are real"""
+    out = []
+    for v in solve(Eq(l, r), s):
+        if isinstance(v, dict): return None
+        v = simplify(v)
+        if free(v) or v.is_real is None: return None
+        if v.is_real and not any(simplify(v - w) == 0 for w in out): out.append(v)
+    return out
+
+def holds(l, r, s, v):
+    """True, False or None: the equation is true at s = v"""
+    try:
+        x, y = N(l.subs(s, v), 30), N(r.subs(s, v), 30)
+    except Exception:
+        return None
+    if not (x.is_number and y.is_number and x.is_finite and y.is_finite): return None
+    return bool(close(x, y))
+
+def same_eq(l1, r1, l2, r2, c1="", c2="", earlier=()):
     l1, r1, l2, r2 = done(l1), done(r1), done(l2), done(r2)
-    if any(undefined(x) or unevaluated(x) for x in (l1, r1, l2, r2)): return None
+    if any(undefined(x) or unevaluated(x) or isinstance(x, MatrixBase) for x in (l1, r1, l2, r2)): return None
     syms = free(l1) | free(r1) | free(l2) | free(r2)
     if not syms:
         return None
     if len(syms) == 1:
         s = list(syms)[0]
-        try:
-            A = set(simplify(v) for v in solve(Eq(l1, r1), s))
-            B = set(simplify(v) for v in solve(Eq(l2, r2), s))
-        except Exception:
-            return None
-        inB = all(any(simplify(x - y) == 0 for y in B) for x in A)
-        if inB and len(A) == len(B): return True
-        # Squaring both sides gains roots: a step that follows from the last is never called wrong
-        return None if inB else False
+        if not (free(l1) | free(r1)) or not (free(l2) | free(r2)): return None
+        A, B = real_roots(l1, r1, s), real_roots(l2, r2, s)
+        if A is None or B is None or not A or not B: return None
+        if len(A) == len(B) and all(any(simplify(x - y) == 0 for y in B) for x in A): return True
+        # Wrong only when the two share no solution either way. Squaring gains roots, a domain
+        # (x > 0, 0 ≤ x < π) loses them and SymPy lists one turn of a periodic answer, so any
+        # overlap is "can't tell"; so are decimals (x = 1.41 for √2) and cases side by side
+        # (x = 3, then x = 5), and a solution that answers an earlier line
+        if places(c1) is not None or places(c2) is not None: return None
+        if solved(l1, r1) and solved(l2, r2): return None
+        if any(holds(l2, r2, s, a) is not False for a in A): return None
+        if any(holds(l1, r1, s, b) is not False for b in B): return None
+        for le, re_ in earlier:
+            if free(le) | free(re_) == {s} and any(holds(le, re_, s, b) is not False for b in B): return None
+        return False
     e1, e2 = l1 - r1, l2 - r2
     if e2 == 0: return None
     k = simplify(e1 / e2)
@@ -188,47 +277,58 @@ def check(f, *a):
     finally:
         signal.alarm(0)
 
-def chain(lines):
+def chain(lines, ns=None):
     out = []
     prev = None
+    earlier = []
     for ln in lines:
         parts, ops = ln.get("parts") or [], ln.get("ops") or []
         verdicts = []
+        follows = False
         try:
-            vals = [ev(p) if p is not None else None for p in parts]
+            vals = [ev(p, ns) if p is not None else None for p in parts]
         except Exception as e:
-            out.append({"status": "unknown", "why": "couldn't read this line"})
+            out.append({"status": "unknown", "why": "couldn't read this line", "follows": False})
             prev = None
             continue
         # Within the line: each = joins equal values
         for i, op in enumerate(ops):
             a, b = vals[i], vals[i + 1]
             if op != "=" or a is None or b is None: continue
-            r = check(same, a, b)
+            r = check(same, a, b, parts[i], parts[i + 1])
             # x + 3 = 7 is an equation to solve, not a claim that the sides are the same: only numbers,
             # and the later links of a chain (= a = b), are held to it
             if r is False and i == 0 and (free(a) or free(b)): r = None
             if r is not None: verdicts.append((r, "the two sides of an = aren't equal" if r is False else ""))
-        # Against the line before
+        # Against the line before: only a line that starts "=" carries on from it (≈ and ≤ don't claim equal)
         if prev is not None:
-            pparts, pops = prev
+            pvals, pops, pcodes = prev
+            link = None
             if parts and parts[0] is None and len(vals) > 1:
-                r = check(same, pparts[-1], vals[1])
-                if r is not None: verdicts.append((r, "it isn't equal to the line before" if r is False else ""))
-            elif len(ops) == 1 and ops[0] == "=" and len(pops) == 1 and pops[0] == "=" and pparts[0] is not None:
-                r = check(same_eq, pparts[0], pparts[1], vals[0], vals[1])
-                if r is not None: verdicts.append((r, "this equation doesn't have the same solutions as the one before" if r is False else ""))
+                if ops[0] == "=":
+                    link = check(same, pvals[-1], vals[1], pcodes[-1], parts[1])
+                    why = "it isn't equal to the line before"
+            elif len(ops) == 1 and ops[0] == "=" and len(pops) == 1 and pops[0] == "=" and pvals[0] is not None:
+                link = check(same_eq, pvals[0], pvals[1], vals[0], vals[1], " ".join(pcodes), " ".join(parts), list(earlier[:-1]))
+                why = "this equation doesn't have the same solutions as the one before"
             elif not ops and not pops:
-                r = check(same, pparts[0], vals[0])
-                if r is not None: verdicts.append((r, "it isn't equal to the line before" if r is False else ""))
+                link = check(same, pvals[0], vals[0], pcodes[0], parts[0])
+                why = "it isn't equal to the line before"
+            if link is not None: verdicts.append((link, why if link is False else ""))
+            follows = link is True
         bad = [w for ok, w in verdicts if ok is False]
-        if bad: out.append({"status": "bad", "why": bad[0]})
-        elif verdicts: out.append({"status": "ok", "why": ""})
-        else: out.append({"status": "unknown", "why": ""})
+        if bad: out.append({"status": "bad", "why": bad[0], "follows": False})
+        elif verdicts: out.append({"status": "ok", "why": "", "follows": follows})
+        else: out.append({"status": "unknown", "why": "", "follows": False})
         # What the next line carries on from: this line's values, the start filled from the line before
-        filled = list(vals)
-        if filled and filled[0] is None and prev is not None: filled[0] = prev[0][-1]
-        prev = (filled, ops) if all(v is not None for v in filled) else None
+        filled, codes = list(vals), list(parts)
+        if filled and filled[0] is None and prev is not None:
+            filled[0], codes[0] = prev[0][-1], prev[2][-1]
+        prev = (filled, ops, codes) if all(v is not None for v in filled) else None
+        if prev and len(ops) == 1 and ops[0] == "=":
+            # Under the same time limit as a check: an integral SymPy can't finish mustn't hold up the rest
+            sides = check(lambda: (done(filled[0]), done(filled[1])))
+            if sides: earlier.append(sides)
     return out
 
 for line in sys.stdin:
@@ -239,7 +339,8 @@ for line in sys.stdin:
     rid = req.get("id")
     try:
         if req.get("op") == "chain":
-            res = {"id": rid, "ok": True, "steps": chain(req.get("lines") or [])}
+            # log10: the same working read with an unmarked log as base 10, the way a school writes it
+            res = {"id": rid, "ok": True, "steps": chain(req.get("lines") or [], NS_LOG10 if req.get("log10") else None)}
         else:
             res = {"id": rid, "ok": True, **evaluate(req.get("parts") or [], req.get("ops") or [])}
     except Exception as e:

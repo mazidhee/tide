@@ -13,7 +13,8 @@ export const newLine = (latex = ''): WorkLine => ({ id: Math.random().toString(3
 /**
  * Your working, one step a line, the way you'd write it down: Return starts the next line, ⌫ on
  * an empty line joins it back, ↑ and ↓ move between lines. A line can start with "=" to carry on
- * from the one above. Once marked, each line shows its tick or cross and the note beside it.
+ * from the one above. Once marked, each line shows its tick, its cross (proved wrong) or its
+ * question (queried, not proved wrong) and the note beside it.
  */
 export function WorkingLines({
   lines,
@@ -50,7 +51,7 @@ export function WorkingLines({
     <ol className={`wl${marks ? ' marked' : ''}`} aria-label="Your working, one step a line">
       {lines.map((l, i) => {
         const m = marks?.[i]
-        const state = m ? (m.ok === true ? 'ok' : m.ok === false ? 'bad' : 'none') : null
+        const state = m ? (m.ok === true ? 'ok' : m.ok === false ? 'bad' : m.doubt ? 'doubt' : 'none') : null
         return (
           <li key={l.id} className={`wl-line${state ? ` ${state}` : ''}`}>
             <span className="wl-n" aria-hidden>
@@ -94,8 +95,8 @@ export function WorkingLines({
               />
               {m && (m.note || m.ok !== null) && (
                 <p className="wl-note">
-                  <span className="wl-mark" aria-label={m.ok === true ? 'Right' : m.ok === false ? 'Wrong' : 'Not marked'}>
-                    {m.ok === true ? '✓' : m.ok === false ? '✗' : '·'}
+                  <span className="wl-mark" aria-label={m.ok === true ? 'Right' : m.ok === false ? 'Wrong' : m.doubt ? 'Queried, not shown to be wrong' : 'Not marked'}>
+                    {m.ok === true ? '✓' : m.ok === false ? '✗' : m.doubt ? '?' : '·'}
                   </span>
                   <MathText text={m.note} />
                 </p>
