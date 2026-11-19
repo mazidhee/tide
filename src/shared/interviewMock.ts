@@ -986,7 +986,8 @@ export function measures(lines: Line[]): Map<string, Pick<ItemMark, 'item' | 'qu
       item: a.item,
       question: a.question,
       kind: kindOfItem(a.item),
-      seconds: Math.round(ms / 1000),
+      // Typed answers are timed as if said at 150 words a minute
+      seconds: typed ? Math.round((words / 150) * 60) : Math.round(ms / 1000),
       words,
       wpm: typed ? 0 : wpm(words, ms),
       fillers: countFillers(text).total,
@@ -1044,6 +1045,8 @@ export function markInCode(input: MockTargetInput, plan: Plan, lines: Line[]): D
     if (m.fillers >= 4) notes.push(`${m.fillers} filler words.`)
     items.push({
       ...m,
+      // The bank's own wording, not the interviewer's spoken version with its "Okay, thanks."
+      question: q?.text ?? (planned?.type === 'scenario' ? `Scenario: ${planned.s.title}` : m.question),
       scores,
       note: notes.join(' ') || 'Covered the basics.',
       weak
@@ -1261,7 +1264,7 @@ export function attemptOf(input: MockTargetInput, persona: Persona, lines: Line[
     scores,
     durations: {
       totalSec: Math.round(totalMs / 1000),
-      speakingSec: Math.round(spokenMs(lines.filter((l) => l.who === 'you')) / 1000),
+      speakingSec: debrief.items.reduce((n, i) => n + i.seconds, 0),
       items
     },
     transcript: lines,
