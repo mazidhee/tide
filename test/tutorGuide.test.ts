@@ -29,7 +29,7 @@ const names = async (key: string, packs?: string) => (await mcp.toolsFor(key, pa
 describe('which tools a session is given', () => {
   it('a side thread gets a handful; a history lesson no maths, data or chat tools; a maths lesson its maths tools', () => {
     const tools = (s: Parameters<typeof G.toolPacks>[0]) => [...G.packTools(G.toolPacks(s))]
-    expect(tools({ kind: 'thread' }).sort()).toEqual(['read_note', 'reference_lookup', 'related_notes', 'run_code', 'save_to_notes', 'search_notes'])
+    expect(tools({ kind: 'thread' }).sort()).toEqual(['quote_source', 'read_note', 'reference_lookup', 'related_notes', 'run_code', 'save_to_notes', 'search_notes'])
     expect(tools({ kind: 'thread', data: true })).toContain('run_sql')
     const history = tools({ kind: 'lesson', humanities: true })
     expect(history).toEqual(expect.arrayContaining(['set_exercise', 'lesson_progress', 'learner_profile', 'search_notes']))
@@ -62,7 +62,7 @@ describe('which tools a session is given', () => {
     const all = await names('lab:x')
     expect(all.length).toBeGreaterThan(25)
     const thread = await names('thread:x', G.packsHeader(G.toolPacks({ kind: 'thread' })))
-    expect(thread.sort()).toEqual(['read_note', 'reference_lookup', 'related_notes', 'run_code', 'save_to_notes', 'search_notes'])
+    expect(thread.sort()).toEqual(['quote_source', 'read_note', 'reference_lookup', 'related_notes', 'run_code', 'save_to_notes', 'search_notes'])
     const history = await names('lab:x', G.packsHeader(G.toolPacks({ kind: 'lesson', humanities: true })))
     expect(history.length).toBeLessThan(all.length - 8)
     expect(history).not.toContain('place_explorable')
@@ -119,8 +119,8 @@ describe('the prompt, in layers', () => {
 
   it('stays small: the stable part of a lesson’s prompt, before the learner, under budget', () => {
     const lesson = forClaude(stableSystem(claudeSystemBase({ kind: 'lesson', maths: true }), { today: new Date(2026, 10, 13), web: true, session: true }))
-    // Was some 26,000 characters with the whole simulation guide and every tool's line; the computing kit's guide (TideMachine) added some 700
-    expect(lesson.length).toBeLessThan(19_800)
+    // Was some 26,000 characters with the whole simulation guide and every tool's line; the computing kit's guide (TideMachine) added some 700, quoting primary sources (quote_source) some 150
+    expect(lesson.length).toBeLessThan(19_950)
     const history = forClaude(stableSystem(claudeSystemBase({ kind: 'lesson', humanities: true }), { today: new Date(2026, 10, 13), web: true, session: true }))
     expect(history.length).toBeLessThan(10_500)
     // Each lesson rule said once: the exercise rule, the citation rule

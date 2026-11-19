@@ -89,6 +89,15 @@ const NOTE_TOOLS = [
       source: { type: 'string', enum: ['python-docs', 'cpython', 'cpp', 'man', 'books'], description: 'Optional: one source only' }
     },
     ['query']
+  ),
+  tool(
+    'quote_source',
+    "Quote a primary source in its own words: a paper, a PEP, an RFC or a docs section. Tide reads the source, checks your words are in it exactly, and returns a block with the quotation, who wrote it, the section and a link: paste that block into your reply as it is. Use it whenever you say what a paper, PEP or the docs say, instead of putting it in your own words. If the words aren't in the source it says so and shows the closest sentence: quote that, or teach without quoting.",
+    {
+      source: { type: 'string', description: 'The source: its link (https://peps.python.org/pep-0484/, https://arxiv.org/abs/1706.03762, a docs page with #section), "PEP 8", "RFC 9110", an arXiv id, or a citation exactly as reference_lookup printed it, e.g. "Python 3.15 docs: reference/datamodel.html#object.__hash__"' },
+      words: { type: 'string', description: 'The exact words to quote, copied from the source: a sentence or two (3 to 160 words). Skip words inside with …' }
+    },
+    ['source', 'words']
   )
 ]
 
@@ -1014,6 +1023,16 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     return refToolText(hits, q, (h) => addSource(ctx, { path: refSourcePath(h), title: `${REF_LABELS[h.source]}: ${h.cite}`, heading: h.heading || undefined, text: clip(h.text, 1200) }))
   }
 
+  if (call.name === 'quote_source') {
+    const source = str('source')
+    const id = ctx.step({ kind: 'read_webpage', label: `Checking a quotation from ${source.slice(0, 80)}`, status: 'running', depth })
+    const { quoteSource, arxivMeta } = await import('./primaryQuote')
+    const r = await quoteSource(source, str('words'), { readWebpage: (u) => readWebpage(u), arxivMeta })
+    ctx.updateStep(id, r.ok ? { status: 'done', detail: `Exact words from ${r.quote.title}` } : { status: 'error', detail: 'Not in the source as written' })
+    if (r.ok) addSource(ctx, { path: r.quote.ref ?? r.quote.url ?? r.quote.title, ...(r.quote.ref ? {} : { url: r.quote.url }), title: r.quote.title, heading: r.quote.section, text: r.quote.text })
+    return r.text
+  }
+
   if (call.name === 'read_note') {
     const path = str('path')
     const id = ctx.step({ kind: 'read_note', label: `Reading ${path.split('/').pop()?.replace(/\.md$/, '')}`, status: 'running', depth })
@@ -1869,6 +1888,8 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // A question about what the docs or the source say: the turn's first step is the lookup (Gemma answered the second such question from memory, with a wrong file)
   const refHint = (await import('@shared/reference')).referenceHint(question)
   if (refHint && !ctx.firstTool) ctx.firstTool = 'reference_lookup'
+  // A PEP, an RFC, a paper or a docs section named in the lesson's topic or this message: quoted in its own words, not paraphrased (shared/primaryQuote)
+  const quoteHint = (await import('@shared/primaryQuote')).primarySourceHint(`${req.topic ?? ''}\n${question}`)
   const turnContext = [
     req.voice ? voiceRules(characterById(req.voice), recentOpenings(req.messages.filter((m) => m.role === 'assistant').map((m) => String(m.content)))) : '',
     req.instructions ? '' : toolHint(question, ctx.web),
@@ -1896,6 +1917,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     // Asked to load one of their files: which tool, and the path (in a lesson too)
     loadHint(question, /\.(csv|tsv)\b|\b(csv|tsv|my data|spreadsheet)\b/i.test(question) ? dataFiles() : []),
     refHint,
+    quoteHint,
     own.length ? `Where this is covered in books the student owns (they open in Tide; point them to the pages when it helps, as a markdown link like [${readingLabel(own[0])}](/${own[0].path.split('/').map(encodeURIComponent).join('/')}#page=${own[0].from})): ${own.map(readingLabel).join('; ')}` : '',
     images.length ? `You can see ${images.length === 1 ? 'the picture' : `these ${images.length} pictures`} from their notes, attached below in this order: ${images.map((im, i) => `${i + 1}) ${im.path}`).join(', ')}. Teach from what they show. To show one in your answer, put its line on its own exactly as written: ${images.map((im) => imageMarkdown(im.path)).join(' ')}` : '',
     figures.length ? `The PDF ${figures.length === 1 ? 'page' : 'pages'} these passages come from ${figures.length === 1 ? 'has' : 'have'} figures, so ${figures.length === 1 ? 'a picture of it is' : 'pictures of them are'} attached below${images.length ? ', after their own pictures' : ''}: ${figures.map((f) => `page ${f.page} of ${f.file.split('/').pop()}`).join(', ')}. Read the figures (diagrams, charts, tables drawn as pictures) as part of the source, and refer to them by page when you teach from them.` : ''
