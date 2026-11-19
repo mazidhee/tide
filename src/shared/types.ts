@@ -917,6 +917,17 @@ export interface TideApi {
     weakModes(): Promise<{ mode: 'coding' | 'design' | 'quant'; category: import('./sharpness').SharpCategory; rating: number }[]>
   }
   /** The morning workout (shared/workout): ratings, titles and the log, kept in the vault under .tide/ */
+  /** Daily algorithm practice (main/algoPractice, shared/algoPractice): one short Python problem a day until core Python is done */
+  algo: {
+    /** Today's problem (picked once a day), its folder for the IDE, the level and progress */
+    today(): Promise<import('./algoPractice').AlgoToday>
+    /** Runs the tests against solution.py in a daily folder (today's when none is given) and records the result */
+    check(root?: string): Promise<import('./algoPractice').AlgoCheck>
+    /** Today's hint; noted, so the solve doesn't raise the level */
+    hint(): Promise<string>
+    /** The daily problem a folder holds, for the IDE's Check button */
+    forRoot(root: string): Promise<{ day: string; title: string; solved: boolean } | null>
+  }
   workout: {
     state(): Promise<import('./workout').WorkoutState>
     logRound(r: Pick<import('./workout').RoundRecord, 'morning' | 'round' | 'championship' | 'items' | 'combo'>): Promise<{ state: import('./workout').WorkoutState; events: import('./workout').RoundEvents }>
