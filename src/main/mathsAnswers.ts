@@ -6,8 +6,10 @@
  * - readPaper: Opus transcribes photos of your working, each line as LaTeX with its box on the
  *   page. Claude only: without it the box says so.
  * - markWorking: SymPy checks each step against the last (main/calculator), then Opus marks each
- *   line and the whole, with SymPy's findings as facts. Without Claude, SymPy's marks stand and
- *   the tutor gives the verdict.
+ *   line and the whole, with SymPy's findings as facts. A cross stands only where SymPy proved the
+ *   step wrong (Opus's other crosses become questions), and when SymPy proves the last line equals
+ *   the solution's answer, no doubt takes the mark down (shared/mathsAnswer settleMarks). Without
+ *   Claude, SymPy's marks stand and the tutor gives the verdict.
  * A private lesson (main/projects privatePath) keeps all of it on the Mac.
  */
 import { promises as fs } from 'fs'
@@ -22,6 +24,7 @@ import {
   parseReadBack,
   parseTranscription,
   readBackPrompt,
+  settleMarks,
   transcribePrompt,
   type Marked,
   type PaperLine,
@@ -115,7 +118,9 @@ export async function markWorking(req: { question: string; lines: string[]; path
       console.log(`[maths answers] marking failed: ${(e as Error).message.slice(0, 160)}`)
       return null
     })
-    const marks = r ? parseLineMarks(r.text, lines.length) : null
+    const read = r ? parseLineMarks(r.text, lines.length) : null
+    // Held to what is certain: a cross only where SymPy proved it, and a right final answer kept right
+    const marks = read ? settleMarks(read, checks, await finalRight(req.question, lines)) : null
     if (marks) {
       logWorking(req, marks)
       return { marks, checks }
@@ -124,6 +129,15 @@ export async function markWorking(req: { question: string; lines: string[]; path
   const marks = marksFromSympy(checks ?? [], lines.length)
   logWorking(req, marks)
   return { marks, checks }
+}
+
+/** Whether SymPy proved the working's last line equal to the answer the hidden solution ends on */
+async function finalRight(question: string, lines: string[]): Promise<boolean> {
+  const { solutionOf } = await import('@shared/lessonCheck')
+  const solution = solutionOf(question)
+  if (!solution || !lines.length) return false
+  const exact = await import('./lessonGuard').then((g) => g.finalExact(solution, lines[lines.length - 1])).catch(() => null)
+  return exact?.result === 'match'
 }
 
 /** Maths working marked, in the learning event log: the answer, and a misconception the marker named */

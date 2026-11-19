@@ -12,7 +12,7 @@ import { join } from 'path'
 import { createInterface } from 'readline'
 import { CALC_WORKER } from '@shared/calcPython'
 import { CalcError, lineToSympy, parseLatex, type Angle } from '@shared/calc'
-import type { CalcResult, StepCheck } from '@shared/mathsAnswer'
+import { otherReadings, settleReadings, type CalcResult, type StepCheck } from '@shared/mathsAnswer'
 
 const IDLE_MS = 5 * 60_000
 const EVAL_MS = 10_000
@@ -133,19 +133,33 @@ export async function evaluate(latex: string, angle: Angle = 'rad'): Promise<Cal
   return { ok: true, kind: r.kind as CalcResult['kind'], exact: (r.exact as string | null) ?? null, numeric: (r.numeric as string | null) ?? null, ...(r.unchanged ? { unchanged: true } : {}) }
 }
 
-/** Each step of a working against the one before: equal, provably not, or can't tell */
+/**
+ * Each step of a working against the one before: equal, provably not, or can't tell. A step found
+ * not equal is read again the other ways the learner may have meant it (sin 30 in degrees, log 100
+ * as base 10) and stays wrong only if it is wrong every way (shared/mathsAnswer otherReadings).
+ */
 export async function checkSteps(latexLines: string[], angle: Angle = 'rad'): Promise<StepCheck[] | null> {
-  const lines = latexLines.map((l) => {
-    try {
-      return lineToSympy(parseLatex(l), angle)
-    } catch {
-      return { parts: [], ops: [] }
-    }
-  })
+  const read = (a: Angle) =>
+    latexLines.map((l) => {
+      try {
+        return lineToSympy(parseLatex(l), a)
+      } catch {
+        return { parts: [], ops: [] }
+      }
+    })
+  const lines = read(angle)
   if (!lines.some((l) => l.parts.length)) return latexLines.map(() => ({ status: 'unknown' as const, why: '' }))
-  const r = await ask({ op: 'chain', lines }, CHAIN_MS)
-  if (!r.ok || !Array.isArray(r.steps)) return null
-  return (r.steps as StepCheck[]).map((s) => ({ status: s.status === 'ok' || s.status === 'bad' ? s.status : 'unknown', why: String(s.why ?? '') }))
+  const run = async (req: Record<string, unknown>): Promise<StepCheck[] | null> => {
+    const r = await ask({ op: 'chain', ...req }, CHAIN_MS)
+    if (!r.ok || !Array.isArray(r.steps)) return null
+    return (r.steps as StepCheck[]).map((s) => ({ status: s.status === 'ok' || s.status === 'bad' ? s.status : 'unknown', why: String(s.why ?? ''), ...(s.follows === true ? { follows: true } : {}) }))
+  }
+  const first = await run({ lines })
+  if (!first?.some((c) => c.status === 'bad')) return first
+  // One at a time: the worker answers in order, and a slow one restarts it
+  const others: (StepCheck[] | null)[] = []
+  for (const o of otherReadings(latexLines, angle)) others.push(await run(o.angle ? { lines: read(o.angle) } : { lines, log10: true }))
+  return settleReadings(first, others)
 }
 
 function friendly(e: string): string {

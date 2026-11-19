@@ -36,7 +36,7 @@ export function PaperView({
   const stateOf = (i: number) => {
     const m = marks?.lines[i]
     if (!m) return lines[i]?.unsure ? 'unsure' : 'read'
-    return m.ok === true ? 'ok' : m.ok === false ? 'bad' : 'none'
+    return m.ok === true ? 'ok' : m.ok === false ? 'bad' : m.doubt ? 'doubt' : 'none'
   }
   const firstBad = marks ? marks.lines.findIndex((m) => m.ok === false) : -1
   const pick = (i: number, from: 'page' | 'list') => {
@@ -70,7 +70,7 @@ export function PaperView({
                   tabIndex={-1}
                   aria-label={`Line ${i + 1}`}
                 >
-                  <span className="wp-badge">{stateOf(i) === 'ok' ? '✓' : stateOf(i) === 'bad' ? `✗ ${i + 1}` : i + 1}</span>
+                  <span className="wp-badge">{stateOf(i) === 'ok' ? '✓' : stateOf(i) === 'bad' ? `✗ ${i + 1}` : stateOf(i) === 'doubt' ? `? ${i + 1}` : i + 1}</span>
                 </div>
               ) : null
             )}
@@ -95,7 +95,7 @@ export function PaperView({
                 className={`wp-line ${st}${active === i ? ' active' : ''}${i === firstBad ? ' first-bad' : ''}`}
                 onClick={() => editing === null && pick(i, 'list')}
               >
-                <span className="wp-n">{st === 'ok' ? <Icon name="check" size={13} /> : st === 'bad' ? <Icon name="x" size={13} /> : i + 1}</span>
+                <span className="wp-n" title={st === 'doubt' ? 'Queried: not shown to be wrong' : undefined}>{st === 'ok' ? <Icon name="check" size={13} /> : st === 'bad' ? <Icon name="x" size={13} /> : st === 'doubt' ? '?' : i + 1}</span>
                 <div className="wp-main">
                   {editing === i ? (
                     <div className="wp-edit" onClick={(e) => e.stopPropagation()}>

@@ -268,6 +268,11 @@
   color: var(--danger);
   font-weight: 700;
 }
+/* Queried by the marker but not proved wrong: a question, never a cross */
+.wl-line.doubt .wl-mark {
+  color: var(--warn);
+  font-weight: 700;
+}
 
 /* The calculator: a tape, then the display */
 .calc {
@@ -821,6 +826,13 @@
 .wp-box.bad .wp-badge {
   background: #d63b2f;
 }
+.wp-box.doubt {
+  border-color: rgba(214, 140, 0, 0.8);
+  border-style: dashed;
+}
+.wp-box.doubt .wp-badge {
+  background: #c97f00;
+}
 .wp-reading h4 {
   margin: 0 0 4px;
   font-size: 13.5px;
@@ -875,6 +887,9 @@
 }
 .wp-line.bad .wp-n {
   color: var(--ma-bad);
+}
+.wp-line.doubt .wp-n {
+  color: var(--warn);
 }
 .wp-main {
   min-width: 0;
@@ -988,6 +1003,9 @@
 }
 .wc-line.bad .wc-mark {
   color: var(--danger);
+}
+.wc-line.doubt .wc-mark {
+  color: var(--warn);
 }
 .wc-tex {
   display: block;

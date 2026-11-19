@@ -7,6 +7,7 @@ import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
 import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { routeFor } from './cloud'
 import { comparePython, finalAnswer, overruled, type Exact } from '@shared/answerCheck'
+import { keptCorrect } from '@shared/mathsAnswer'
 import { createHash } from 'crypto'
 import { sourcesForCheck } from '@shared/sources'
 import { promises as fs } from 'fs'
@@ -72,8 +73,13 @@ export async function exactCheck(req: ChatRequest): Promise<Exact | null> {
   const solution = solutionOf(text(prev))
   // A pick from options (with reasoning after it) isn't a worked answer to compare
   if (!solution || req.askType === 'choice' || !/^Answer:/i.test(mine) || /^Answer:\s*\([A-Z]\)\s/.test(mine)) return null
+  return finalExact(solution, mine.replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)\s*$/, ''))
+}
+
+/** The final answer a working ends on against the one a solution ends on, by SymPy; null when either isn't one it can read */
+export async function finalExact(solution: string, answer: string): Promise<Exact | null> {
   const expected = finalAnswer(solution)
-  const theirs = finalAnswer(mine.replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)\s*$/, ''))
+  const theirs = finalAnswer(answer)
   if (!expected || !theirs) return null
   noteUse('maths')
   const r = await runCode('python', comparePython(theirs, expected), '', 15_000).catch(() => null)
@@ -165,6 +171,10 @@ export async function checkLessonReply(
   const verdict = graded?.[1]?.toLowerCase()
   const exactly = overruled(opts.exact, verdict, graded?.[2] ?? '')
   if (exactly) found.mark = exactly
+  // Working marked line by line whose final answer SymPy proved right, with no step proved wrong, is
+  // correct (shared/mathsAnswer settleMarks): a line only queried can't take the mark down
+  if (!found.mark && keptCorrect(text([...req.messages].reverse().find((m) => m.role === 'user')), verdict))
+    found.mark = { verdict: 'correct', why: 'SymPy checked your final answer against the solution and it is right, and no line of your working was shown to be wrong. A line only queried is worth a second look, not a lost mark.' }
 
   const step = (id: string, label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label, status, depth: 0 } })
 
