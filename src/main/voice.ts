@@ -194,6 +194,28 @@ export async function transcribe(wav: Uint8Array, where: Heard = {}): Promise<st
   return ((await (await call('/transcribe', wav)).json()) as { text: string }).text
 }
 
+/**
+ * A whole spoken answer, written out once it's finished. The pieces heard along the way (for the
+ * live caption) are joined into one recording, so the model hears every word with the sentence
+ * around it, which it gets right more often than short fragments.
+ */
+export const transcribeAnswer = (wavs: Uint8Array[], where: Heard = {}) => transcribe(joinWavs(wavs), where)
+
+/** 16 kHz mono 16-bit WAVs, one after another with a short gap, as one WAV */
+function joinWavs(wavs: Uint8Array[]): Uint8Array {
+  const gap = new Uint8Array(16000 * 2 * 0.3)
+  const parts = wavs.flatMap((w, i) => (i ? [gap, w.subarray(44)] : [w.subarray(44)]))
+  const size = parts.reduce((n, p) => n + p.length, 0)
+  const out = new Uint8Array(44 + size)
+  out.set(wavs[0].subarray(0, 44))
+  let at = 44
+  for (const p of parts) (out.set(p, at), (at += p.length))
+  const v = new DataView(out.buffer)
+  v.setUint32(4, 36 + size, true)
+  v.setUint32(40, size, true)
+  return out
+}
+
 const DEEPGRAM = 'deepgram'
 
 async function deepgram(wav: Uint8Array, key: string, topic?: string): Promise<string> {

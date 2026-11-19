@@ -1428,6 +1428,8 @@ export interface TideApi {
     speak(text: string, voice?: string, speed?: number): Promise<Uint8Array>
     /** where: the lesson's note and topic (the topic helps Deepgram spell its jargon) */
     transcribe(wav: Uint8Array, where?: { path?: string; topic?: string }): Promise<string>
+    /** A whole spoken answer from its pieces, read in one go */
+    transcribeAnswer(wavs: Uint8Array[], where?: { topic?: string }): Promise<string>
     hasDeepgram(): Promise<boolean>
     /** Checks the key with Deepgram, then keeps it in the Keychain (null forgets it) */
     saveDeepgram(key: string | null): Promise<void>

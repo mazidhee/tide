@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { advance, completeSentences, itemIdOf, nextAfter, planRound, START, type Cursor, type Line, type MockLoaded, type MockTurnRequest, type Move, type Next, type Persona, type TurnMark } from '@shared/interviewMock'
 import { InterviewClock, useInterviewClock } from '../InterviewClock'
 import { Icon } from '../Icon'
+import { getFlow, useFlow } from '../Voice'
 import { InterviewerVoice, LevelMeter, openMic, type Mic, type MicMode, type MicPiece } from './LiveMockAudio'
 
 /** What the learner's side is doing */
@@ -19,6 +20,11 @@ export interface CallResult {
 
 const PRESENT_MS = 15 * 60_000
 const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+/** Room for one spoken answer; at the limit the interviewer moves on, as a real one would */
+const ANSWER_MS = 3 * 60_000
+/** A pause this long ends the turn on its own; shorter ones are thinking time */
+const END_PAUSE_MS = 7000
+
 const fmt = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, '0')}`
 const initials = (name: string) =>
   name
@@ -69,7 +75,10 @@ export function LiveMockCall({
   const [live, setLive] = useState('')
   const [level, setLevel] = useState(0)
   const [typed, setTyped] = useState('')
-  const [typing, setTypingState] = useState(!loaded.voice)
+  // Wispr Flow chosen for dictation: Flow listens and types into the answer box, and you send it
+  const flow = useFlow()
+  const [flowKey, setFlowKey] = useState('')
+  const [typing, setTypingState] = useState(!loaded.voice || flow)
   const typingRef = useRef(typing)
   const setTyping = (v: boolean | ((t: boolean) => boolean)) =>
     setTypingState((t) => {
@@ -90,11 +99,12 @@ export function LiveMockCall({
   const t0 = useRef(0)
   const voice = useRef<InterviewerVoice | null>(null)
   const mic = useRef<Mic | null>(null)
-  const pieces = useRef<{ text: Promise<string>; start: number; end: number }[]>([])
+  const pieces = useRef<{ text: Promise<string>; wav: Uint8Array; start: number; end: number }[]>([])
   const yourTurn = useRef(false)
   const closing = useRef(false)
   const finished = useRef(false)
   const turnEndAt = useRef(0)
+  const turnStart = useRef(0)
   const waits = useRef<number[]>([])
   const firstText = useRef<number[]>([])
   const streamId = useRef('')
@@ -136,6 +146,7 @@ export function LiveMockCall({
   /** Learner's turn starts: the mic listens */
   const listen = () => {
     yourTurn.current = true
+    turnStart.current = performance.now()
     pieces.current = []
     setLive('')
     setYou(typingRef.current || !canHear ? 'typing' : micMode === 'ptt' ? 'waiting' : 'listening')
@@ -230,8 +241,15 @@ export function LiveMockCall({
     let end = 0
     if (!typedText && pieces.current.length) {
       setYou('writing')
-      const got = await Promise.all(pieces.current.map((p) => p.text))
-      text = got.join(' ').replace(/\s+/g, ' ').trim()
+      // The whole answer read again in one go is more accurate than the live pieces; they stand in if it fails
+      const quick = async () => (await Promise.all(pieces.current.map((p) => p.text))).join(' ')
+      const full = window.tide.voice.transcribeAnswer(
+        pieces.current.map((p) => p.wav),
+        { topic: input.company || undefined }
+      )
+      const late = new Promise<string>((_, no) => setTimeout(() => no(new Error('slow')), 30_000))
+      const got = await Promise.race([full, late]).then((t) => t.trim() || quick()).catch(quick)
+      text = got.replace(/\s+/g, ' ').trim()
       start = pieces.current[0].start - t0.current
       end = pieces.current[pieces.current.length - 1].end - t0.current
     }
@@ -281,13 +299,14 @@ export function LiveMockCall({
       if (canHear)
         openMic({
           mode: micMode,
+          endSilenceMs: END_PAUSE_MS,
           onPiece: (p: MicPiece) => {
             if (!yourTurn.current) return
             const text = window.tide.voice
               .transcribe(p.wav, { topic: input.company || undefined })
               .then((t) => t.trim())
               .catch((e) => (setError(clean(e)), ''))
-            pieces.current.push({ text, start: p.start, end: p.end })
+            pieces.current.push({ text, wav: p.wav, start: p.start, end: p.end })
             void text.then((t) => t && setLive((cur) => (cur ? `${cur} ${t}` : t)))
           },
           onEnd: () => void endRef.current(),
@@ -333,6 +352,20 @@ export function LiveMockCall({
     if (stage === 'presenting' && presentStart && performance.now() - presentStart > presentLimit && yourTurn.current) void endTurn(true)
   })
 
+  // With Flow the box has the cursor on every turn, so holding the Flow key just works
+  const box = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (flow) void getFlow().then((f) => setFlowKey(f.pushToTalk))
+  }, [flow])
+  useEffect(() => {
+    if (typing && yourTurn.current) box.current?.focus()
+  }, [you, typing])
+
+  // An answer's own limit: three minutes, then the interviewer moves on
+  useEffect(() => {
+    if (yourTurn.current && stage !== 'presenting' && !typingRef.current && turnStart.current && performance.now() - turnStart.current > ANSWER_MS) void endTurn(true)
+  })
+
   // Push-to-talk: hold Space. Enter (not typing) ends the turn.
   useEffect(() => {
     const typingInBox = (e: KeyboardEvent) => (e.target as HTMLElement)?.closest?.('textarea, input')
@@ -365,6 +398,7 @@ export function LiveMockCall({
 
   const presenting = stage === 'presenting'
   const presentMs = presenting && presentStart ? performance.now() - presentStart : 0
+  const answerMs = yourTurn.current && !presenting && turnStart.current ? performance.now() - turnStart.current : 0
   const yourLine = yourTurn.current
   const stageLabel = presenting ? 'Your presentation' : stage === 'qa' ? 'Questions on your talk' : stage === 'scenario' ? 'Scenario' : stage === 'ask-them' ? 'Your questions' : stage === 'close' ? 'Closing' : stage === 'intro' ? 'Introductions' : 'Questions'
   const youLabel: Record<You, string> = {
@@ -372,7 +406,7 @@ export function LiveMockCall({
     listening: presenting ? 'Listening to your talk' : 'Listening',
     speaking: 'Hearing you',
     writing: 'Writing it down…',
-    typing: 'Type your answer'
+    typing: flow ? 'Answer with Flow' : 'Type your answer'
   }
 
   return (
@@ -463,12 +497,27 @@ export function LiveMockCall({
             {youLabel[you]}
           </span>
           {!typing && canHear && <LevelMeter level={yourLine ? level : 0} />}
+          {yourLine && !presenting && (
+            <span className="lm-answer-timer" role="timer" aria-label="Time on this answer">
+              <span className={answerMs > ANSWER_MS - 30_000 ? 'low' : ''}>{fmt(answerMs)}</span>
+              <span className="lm-muted"> / {fmt(ANSWER_MS)}</span>
+            </span>
+          )}
         </div>
         <div className="lm-you-main">
           {typing ? (
             <textarea
               className="lm-type"
-              placeholder={yourLine ? (presenting ? 'Type your talk, or paste your notes' : 'Type your answer. Enter sends, Shift+Enter for a new line.') : 'Wait for the question…'}
+              ref={box}
+              placeholder={
+                !yourLine
+                  ? 'Wait for the question…'
+                  : flow
+                    ? `Hold ${flowKey || 'your Flow key'} and answer; Flow types it here. Take your time, then press Enter.`
+                    : presenting
+                      ? 'Type your talk, or paste your notes'
+                      : 'Type your answer. Enter sends, Shift+Enter for a new line.'
+              }
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => {
@@ -483,7 +532,7 @@ export function LiveMockCall({
             />
           ) : (
             <p className={`lm-live${live ? '' : ' empty'}`}>
-              {live || (yourLine ? (micMode === 'ptt' ? 'Hold Space and answer. Let go when you’re done.' : presenting ? 'Present when you’re ready. Press “I’ve finished” at the end.' : 'Answer out loud. A pause of a couple of seconds ends your turn.') : ' ')}
+              {live || (yourLine ? (micMode === 'ptt' ? 'Hold Space and answer. Let go when you’re done.' : presenting ? 'Present when you’re ready. Press “I’ve finished” at the end.' : 'Answer out loud and take your time. Press Done or Enter when you’ve finished; a long pause also ends your turn.') : ' ')}
             </p>
           )}
         </div>

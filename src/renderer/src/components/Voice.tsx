@@ -10,7 +10,7 @@ import { pageKey } from '../lib/typing'
 let handyInfo: Promise<{ installed: boolean; shortcut: string; model: string }> | null = null
 const getHandy = () => (handyInfo ??= window.tide.app.handy())
 let flowInfo: Promise<{ installed: boolean; pushToTalk: string }> | null = null
-const getFlow = () => (flowInfo ??= window.tide.app.flow())
+export const getFlow = () => (flowInfo ??= window.tide.app.flow())
 
 /** Wispr Flow does the dictation: it types into whatever box has the cursor */
 export const useFlow = () => (useApp().settings.voice ?? DEFAULT_VOICE).dictation === 'flow'

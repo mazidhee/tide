@@ -604,6 +604,7 @@ const api: TideApi = {
     setup: invoke('voice:setup'),
     speak: invoke('voice:speak'),
     transcribe: invoke('voice:transcribe'),
+    transcribeAnswer: invoke('voice:transcribeAnswer'),
     hasDeepgram: invoke('voice:hasDeepgram'),
     saveDeepgram: invoke('voice:saveDeepgram'),
     warm: invoke('voice:warm'),

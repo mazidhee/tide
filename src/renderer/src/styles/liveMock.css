@@ -533,6 +533,15 @@
   color: var(--accent);
 }
 
+.lm-answer-timer {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.lm-answer-timer .low {
+  color: var(--warn);
+}
+
 .lm-you-main {
   min-width: 0;
 }
