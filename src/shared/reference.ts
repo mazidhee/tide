@@ -348,6 +348,14 @@ export function chunkNotebook(path: string, json: string): RefPassage[] {
   return out.filter((p) => !/^<!--|^< \[/.test(p.text))
 }
 
+/** A file of a source into passages */
+export function passagesOf(s: RefSource, rel: string, text: string): RefPassage[] {
+  if (s === 'cpython') return chunkCode(s, rel, text)
+  if (s === 'man') return chunkMan(rel, text)
+  if (s === 'books' && rel.endsWith('.ipynb')) return chunkNotebook(rel, text)
+  return chunkHtml(s, rel, text)
+}
+
 // ---------- Ranking ----------
 
 /**
@@ -374,7 +382,7 @@ export function rrf<T>(lists: { items: T[]; weight?: number }[], key: (t: T) => 
 export function refToolText(hits: RefHit[], query: string, sourceIndex: (h: RefHit) => number, clip = 1100): string {
   if (!hits.length) return `Nothing in the offline reference matches "${query}". Try other words (an identifier like __hash__ or PyLong_FromLong finds its definition).`
   return [
-    'Passages from the offline reference. Quote the words that settle the point and cite them as given, e.g. (Python docs: reference/datamodel.html#object.__hash__) or (CPython: Objects/longobject.c:120).',
+    'Passages from the offline reference. Quote the words that settle the point and cite them as given, e.g. (Python docs: reference/datamodel.html#object.__hash__) or (CPython: Objects/longobject.c:120). In a lesson, quote with quote_source: the citation as printed after the number, and the exact words.',
     ...hits.map((h) => {
       const body = h.text.length > clip ? `${h.text.slice(0, clip)}…` : h.text
       return `[${sourceIndex(h)}] ${REF_LABELS[h.source]}: ${h.cite}\n${h.title}${h.heading && h.heading !== h.title ? ` › ${h.heading}` : ''}\n${body}`

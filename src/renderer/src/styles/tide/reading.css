@@ -96,4 +96,66 @@
   .prose .reading-facts {
     gap: 2px 16px;
   }
+
+  /* A quotation from a paper, PEP or docs section: the source's words in the book face, a rule in the accent beside them, who said it under them */
+  .prose .primary-quote {
+    margin: 6px 0 20px;
+    padding: 2px 0 2px 18px;
+    border-left: 2px solid var(--accent);
+  }
+  .prose .primary-quote blockquote {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font-family: var(--read);
+    font-size: var(--read-size);
+    line-height: 1.6;
+    text-wrap: pretty;
+    hanging-punctuation: first;
+  }
+  .prose .primary-quote blockquote p {
+    margin: 0 0 0.55em;
+    max-width: 66ch;
+  }
+  .prose .primary-quote blockquote p:first-child::before {
+    content: '“';
+  }
+  .prose .primary-quote blockquote p:last-child::after {
+    content: '”';
+  }
+  .prose .primary-quote[data-kind='source'] blockquote p::before,
+  .prose .primary-quote[data-kind='source'] blockquote p::after {
+    content: none;
+  }
+  .prose .primary-quote pre.reading-code {
+    margin: 0.1em 0 0.6em;
+  }
+  .prose .primary-quote-cite {
+    gap: 0 8px;
+    font: 400 var(--t-meta) / 18px var(--ui);
+    color: var(--ink-3);
+  }
+  .prose .primary-quote-cite::before {
+    content: '—';
+    color: var(--ink-3);
+  }
+  .prose .primary-quote-label {
+    display: none;
+  }
+  .prose .primary-quote-title {
+    font: 600 var(--t-meta) / 18px var(--ui);
+    color: var(--ink);
+  }
+  .prose .primary-quote-foot {
+    gap: 2px 16px;
+    margin-top: 2px;
+    font: 400 var(--t-meta) / 18px var(--ui);
+    color: var(--ink-3);
+  }
+  .prose .primary-quote-foot a,
+  .prose .primary-quote-foot a.wikilink {
+    font-weight: 500;
+    color: var(--accent-text);
+  }
 }
