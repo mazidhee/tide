@@ -19,7 +19,7 @@ import { createHash, randomBytes } from 'crypto'
 import { existsSync, promises as fs, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
-import { composeFile, PRACTICE_DB, PRACTICE_PORTS, PRACTICE_PROJECT, PRACTICE_URL, SPEC_PATHS, type DockerState, type PracticeStatus } from '@shared/practiceStack'
+import { composeFile, loadScript, PRACTICE_DB, PRACTICE_PORTS, PRACTICE_PROJECT, PRACTICE_URL, SPEC_PATHS, type DockerState, type PracticeStatus } from '@shared/practiceStack'
 import { generate, specProblems, toExtendedJson, type PracticeSpec } from '@shared/practiceData'
 import { applyLayout, indexMeta, LAYOUT_PATHS, layoutNeeds, layoutProblems, type DbMeta, type PracticeLayout } from '@shared/practiceLayout'
 import { getKey, setKey } from './cloud'
@@ -170,17 +170,23 @@ async function seed(): Promise<void> {
   const data = generate(spec.spec)
   await fs.rm(seedDir(), { recursive: true, force: true })
   await fs.mkdir(seedDir(), { recursive: true })
-  for (const [name, docs] of data) await fs.writeFile(join(seedDir(), `${name}.json`), toExtendedJson(docs))
+  for (const [name, docs] of data) if (docs.length) await fs.writeFile(join(seedDir(), `${name}.json`), toExtendedJson(docs))
   busy = 'Loading practice data…'
   await mongosh('db.dropDatabase()')
+  // Made first with their options (a time series, a capped or system collection), so loading keeps them
+  const made = spec.spec.collections.filter((c) => c.create).map((c) => [c.name, c.create] as const)
+  if (made.length) {
+    const r = await mongosh(`${JSON.stringify(made)}.forEach(([n, o]) => db.createCollection(n, o))`)
+    if (r.code !== 0) throw new Error(`Making collections failed: ${(r.err || r.out).slice(0, 300)}`)
+  }
   // Copied into the container (no shared folder needed), then loaded there with mongoimport
   await compose(['exec', '-T', 'mongo', 'sh', '-c', 'rm -rf /tmp/seed && mkdir -p /tmp/seed'])
   const cp = await compose(['cp', `${seedDir()}/.`, 'mongo:/tmp/seed/'], 300_000)
   if (cp.code !== 0) throw new Error(`Copying the data into MongoDB failed: ${(cp.err || cp.out).slice(0, 300)}`)
-  for (const [name] of data) {
-    const r = await compose(['exec', '-T', 'mongo', 'mongoimport', '--quiet', '--db', PRACTICE_DB, '--collection', name, '--drop', '--jsonArray', '--file', `/tmp/seed/${name}.json`], 300_000)
-    if (r.code !== 0 || /Failed|error/i.test(r.err)) throw new Error(`Loading ${name} failed: ${(r.err || r.out).slice(0, 300)}`)
-  }
+  // One script loads every collection in one exec (hundreds of execs take minutes)
+  const premade = new Set(made.map(([n]) => n))
+  const r = await compose(['exec', '-T', 'mongo', 'sh', '-c', loadScript([...data].filter(([, docs]) => docs.length).map(([name]) => ({ name, drop: !premade.has(name) })))], 1_800_000)
+  if (r.code !== 0 || /Failed|error/i.test(r.err)) throw new Error(`${(r.err || r.out).trim().split('\n').slice(-3).join(' ').slice(0, 300) || 'Loading the data failed.'}`)
   // A collection with no documents still exists (Metabase lists it), as in the database it copies
   const empty = [...data].filter(([, docs]) => !docs.length).map(([name]) => name)
   if (empty.length) await mongosh(`${JSON.stringify(empty)}.forEach((n) => { if (!db.getCollectionNames().includes(n)) db.createCollection(n) })`)
