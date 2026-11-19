@@ -278,7 +278,7 @@ function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext }: { slug: s
     const secs = all.reduce((n, t) => n + (t.seconds ?? spokenSeconds(t.a)), 0)
     const spoken = all.some((t) => t.seconds !== null)
     try {
-      const m = await window.tide.interview.mark(slug, { drill: spec.drill, question: spec.question, answer: text, seconds: spec.drill === 'behavioural' || spec.drill === 'assessor' ? secs : spec.drill === 'talk' ? secs : secs / Math.max(1, all.length), ...spec.input })
+      const m = await window.tide.interview.mark(slug, { drill: spec.drill, question: spec.question, answer: text, seconds: spec.drill === 'scenario' ? secs / Math.max(1, all.length) : secs, ...spec.input })
       setMark(m)
       const p = await window.tide.interview.attempt(slug, attemptOf({ item: spec.item, area: spec.area, drill: spec.drill, mark: m, seconds: secs, spoken, answer: text, at: Date.now() }))
       onSaved(p)
@@ -358,7 +358,7 @@ function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext }: { slug: s
         <ol className="it-turns">
           {turns.map((t, i) => (
             <li key={i}>
-              {(spec.drill !== 'behavioural' || i > 0) && <p className="it-turn-q">{spec.drill === 'scenario' ? `Part ${i + 1}. ${t.q}` : t.q}</p>}
+              {(spec.drill === 'scenario' || i > 0) && <p className="it-turn-q">{spec.drill === 'scenario' ? `Part ${i + 1}. ${t.q}` : t.q}</p>}
               <p className="it-turn-a">{t.a}</p>
             </li>
           ))}

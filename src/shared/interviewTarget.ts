@@ -1064,7 +1064,8 @@ export function markInCode(i: MarkInput, natural: (t: string) => number): MarkRe
       natural: nat
     }
   } else if (i.drill === 'cv') {
-    points = [...(i.evidence ?? []), ...(i.anchors ?? [])]
+    // Their facts are what to check; the anchors only stand in when there are none
+    points = i.evidence?.length ? i.evidence : i.anchors ?? []
     const hit = points.length ? split(points).covered.length / points.length : 0.5
     const reasons = (text.match(/\b(because|so that|so we|trade-?off|instead of|rather than|the reason|which meant|if i did it again|i would change)\b/gi) ?? []).length
     marks = { accuracy: Math.min(1, hit * 1.5), depth: Math.min(1, reasons * 0.3 + (words > 90 ? 0.4 : words / 225)), clarity: nat, length }
