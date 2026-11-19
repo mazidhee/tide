@@ -42,6 +42,7 @@ import {
   type RoundKind,
   type TurnMark
 } from '@shared/interviewMock'
+import { lockedText, parseScript, scriptFile, SCRIPTS_DIR } from '@shared/interviewScript'
 import { absPath } from './vault'
 import { getSettings } from './settings'
 
@@ -260,6 +261,14 @@ export async function loadInput(slug: string, roundId: string): Promise<MockTarg
     })
   }
   if (!questions.length) questions.push(...questionsFromNotes(t.notes))
+  // The learner's locked scripts: what they meant to say, for the debrief to compare against
+  await Promise.all(
+    questions.map(async (q) => {
+      const raw = await read(join(t.dir, SCRIPTS_DIR, scriptFile(q.id)))
+      const text = raw ? lockedText(parseScript(raw)) : null
+      if (text) q.script = text
+    })
+  )
 
   const stories: MockStory[] = sections(sMd)
     .filter((s) => s.level === 2)

@@ -40,3 +40,16 @@ The overall figure is the weakest-weighted mean. A countdown runs to `date` and 
 - **Live mock.** One full round as the real thing: the interviewer introduces themselves, then asks for a short intro. The interviewer speaks aloud (TTS, not the professor's voice) and the learner answers aloud (STT). It ends with recruiter-style feedback and readiness updates.
 
 The answers Tide writes follow the human-writing guide (src/shared/humanWriting.ts): plain words, varied sentence length, none of the AI tells (inflated vocabulary, rule-of-three padding, "not only… but", em-dash chains, generic upbeat closers). They are never invented: anything the learner hasn't told Tide is a gap to ask about.
+
+## Scripts: co-writing a spoken answer
+
+From any question (its row in the target, or a drill), "Write my script" opens a workspace for it (shared/interviewScript, main/interviewScript, components/interview/ScriptWorkspace). The draft is edited in place. It shows its word count and spoken time (150 words a minute) against the target for the kind of question (an intro 60–90 s, behavioural 90–120 s, or what the learner asks for: "make it 60 seconds"). The AI tells, bracketed gaps and claims whose numbers or names aren't in the learner's material ("confirm this is true") are marked in the text.
+
+Beside the draft the learner talks to Tide ("less formal", "start with the project", "two other openings"). Opus replies with a revised version and a short note, or with two alternatives to pick from. Hand edits are kept as versions before Tide revises. Every version is kept; any one can be compared with the newest or brought back. "This is the one" locks a version, and Haiku pulls out its beats once. Say it reads the locked script once, hides it, and marks the learner's run on its beats (Sonnet, else in code), its time and how natural it sounded, then shows the script with the missed beats marked. Locked scripts also go into drill marking and the live mock's debrief as the learner's intended answer.
+
+Facts the learner states in feedback are allowed and recorded in the script. Anything else unsupported is a gap or a flag, never invented. Without Claude, everything except drafting and revising still works: the first version comes from the learner's own draft, the model answer or the outline.
+
+| File | What it holds |
+|---|---|
+| `scripts/<question id>.md` | Front matter: `question`, `questionId`, `status` (draft \| locked), `lockedVersion`, `target` (seconds, when asked for), `beats`. The body has every version, newest first (`## Version N`, who and when, Tide's note as a quote), then `## Conversation` and `## Facts you stated`. |
+| `voice.md` | `## Rules` (how the learner speaks; feedback that is a general rule is offered here with one click) and `## Sample sentences` (seeded from "### Your draft" sections in questions.md and the learner's own answers among their sources; new sentences they write by hand are added). Every draft follows it. |

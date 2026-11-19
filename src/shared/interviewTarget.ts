@@ -7,6 +7,8 @@
  * Nothing here knows about a particular person, company or interview: that all lives in the vault.
  */
 
+import type { ScriptApi } from './interviewScript'
+
 export const TARGETS_FOLDER = 'Interview prep'
 
 export type RoundKind = 'behavioural' | 'technical' | 'presentation' | 'hirevue' | 'general'
@@ -1012,6 +1014,10 @@ export interface MarkInput {
   minutes?: number
   /** The question's own limit in seconds ("under 90 seconds" in its route) */
   limit?: number
+  /** The learner's locked script for it (shared/interviewScript): their intended answer */
+  script?: string
+  /** That script's beats, which a run of it should land */
+  beats?: string[]
 }
 
 export interface MarkResult {
@@ -1046,7 +1052,7 @@ export function markInCode(i: MarkInput, natural: (t: string) => number): MarkRe
   let marks: Record<string, number> = {}
   let points: string[] = []
   if (i.drill === 'behavioural') {
-    points = [...(i.anchors ?? []), ...(i.outline ?? [])]
+    points = [...(i.beats ?? []), ...(i.anchors ?? []), ...(i.outline ?? [])]
     const route = i.route?.length ? i.route : ['Situation', 'Action', 'Result']
     const lower = text.toLowerCase()
     const star = starPartsLite(lower)
@@ -1065,7 +1071,7 @@ export function markInCode(i: MarkInput, natural: (t: string) => number): MarkRe
     }
   } else if (i.drill === 'cv') {
     // Their facts are what to check; the anchors only stand in when there are none
-    points = i.evidence?.length ? i.evidence : i.anchors ?? []
+    points = [...(i.beats ?? []), ...(i.evidence?.length ? i.evidence : i.anchors ?? [])]
     const hit = points.length ? split(points).covered.length / points.length : 0.5
     const reasons = (text.match(/\b(because|so that|so we|trade-?off|instead of|rather than|the reason|which meant|if i did it again|i would change)\b/gi) ?? []).length
     marks = { accuracy: Math.min(1, hit * 1.5), depth: Math.min(1, reasons * 0.3 + (words > 90 ? 0.4 : words / 225)), clarity: nat, length }
@@ -1270,7 +1276,8 @@ export interface ClarifyRequest {
   question: string
 }
 
-export interface InterviewApi {
+/** With the scripts' calls (shared/interviewScript) */
+export interface InterviewApi extends ScriptApi {
   list(): Promise<TargetSummary[]>
   get(slug: string): Promise<TargetBundle | null>
   create(t: NewTarget): Promise<{ slug: string; folder: string }>

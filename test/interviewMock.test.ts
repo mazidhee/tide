@@ -298,6 +298,17 @@ describe('interviewer', () => {
     expect(t).toMatch(/introduce themselves/)
     expect(markPrompt(i, planRound(i, 1), [])).toContain('Scenario rubric')
   })
+  it('the debrief compares an answer with the learner’s locked script', () => {
+    const i = input('behavioural')
+    const plan = planRound(i, 1)
+    const q = plan.items.find((x) => x.type === 'question')
+    expect(q).toBeTruthy()
+    expect(markPrompt(i, plan, [])).not.toContain('intended answers')
+    const withScript: MockTargetInput = { ...i, questions: i.questions.map((x) => ({ ...x, script: 'I rebuilt the payment check myself.' })) }
+    const p = markPrompt(withScript, planRound(withScript, 1), [])
+    expect(p).toContain('intended answers')
+    expect(p).toContain('I rebuilt the payment check myself.')
+  })
   it('the scripted interviewer opens, follows up on a thin answer and closes', () => {
     const i = input('behavioural')
     const p = makePersona(i, 5)
