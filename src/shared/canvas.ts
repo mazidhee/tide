@@ -1,13 +1,14 @@
 /**
- * System design canvases, stored as JSON Canvas (https://jsoncanvas.org), the format Obsidian
- * uses, so a design opens in Obsidian too. Tide adds a `kind` to each node (service, database,
- * queue...), which other apps ignore, and maps it to a canvas colour so it still reads there.
+ * Canvases (system designs, diagrams and concept maps), stored as JSON Canvas
+ * (https://jsoncanvas.org), the format Obsidian uses, so a canvas opens in Obsidian too. Tide adds
+ * a `kind` to each node (service, database, concept, example...), which other apps ignore, and
+ * maps it to a canvas colour so it still reads there.
  *
  * The same small set of operations is used by the editor and by the tutor's canvas_edit tool, and
  * `describeCanvas` turns a design into text the model can reason about.
  */
 
-export type ComponentKind = 'client' | 'service' | 'database' | 'cache' | 'queue' | 'lb' | 'gateway' | 'cdn' | 'storage' | 'worker' | 'external' | 'note'
+export type ComponentKind = 'client' | 'service' | 'database' | 'cache' | 'queue' | 'lb' | 'gateway' | 'cdn' | 'storage' | 'worker' | 'external' | 'note' | 'concept' | 'example' | 'question'
 
 export const COMPONENTS: { kind: ComponentKind; label: string; color: string }[] = [
   { kind: 'client', label: 'Client', color: '5' },
@@ -21,35 +22,74 @@ export const COMPONENTS: { kind: ComponentKind; label: string; color: string }[]
   { kind: 'storage', label: 'Object storage', color: '1' },
   { kind: 'cdn', label: 'CDN', color: '5' },
   { kind: 'external', label: 'External API', color: '' },
-  { kind: 'note', label: 'Note', color: '' }
+  { kind: 'note', label: 'Note', color: '' },
+  // A concept map's parts: the ideas, examples of them, and what is still open
+  { kind: 'concept', label: 'Concept', color: '6' },
+  { kind: 'example', label: 'Example', color: '4' },
+  { kind: 'question', label: 'Question', color: '3' }
 ]
+
+/** The parts of a system design, and of a concept map */
+export const SYSTEM_KINDS: ComponentKind[] = ['client', 'service', 'database', 'cache', 'queue', 'lb', 'gateway', 'worker', 'storage', 'cdn', 'external', 'note']
+export const MAP_KINDS: ComponentKind[] = ['concept', 'example', 'question', 'note']
+
+/** A canvas with no system parts on it reads as a concept map (an empty one too) */
+export const isConceptMap = (c: Canvas) => !c.nodes.some((n) => n.kind && SYSTEM_KINDS.includes(n.kind) && n.kind !== 'note')
 const KINDS = new Set(COMPONENTS.map((c) => c.kind))
 
+export type Side = 'top' | 'right' | 'bottom' | 'left'
+
+/**
+ * A node as JSON Canvas defines it (text, file, link or group), plus Tide's `kind`. Fields this
+ * app doesn't know (another app's, or a later version of the spec's) ride along untouched, so
+ * opening and saving a canvas never loses anything.
+ */
 export interface CanvasNode {
   id: string
-  type: 'text'
-  text: string
+  type: 'text' | 'file' | 'link' | 'group' | (string & {})
   x: number
   y: number
   width: number
   height: number
   color?: string
+  /** text nodes: Markdown. Tide reads the first line as the name, the rest as details */
+  text?: string
+  /** file nodes: a path in the vault, and an optional #heading or #^block inside it */
+  file?: string
+  subpath?: string
+  /** link nodes */
+  url?: string
+  /** group nodes */
+  label?: string
+  background?: string
+  backgroundStyle?: 'cover' | 'ratio' | 'repeat' | (string & {})
+  /** Tide's: what part of a system this is */
   kind?: ComponentKind
+  [extra: string]: unknown
 }
 
 export interface CanvasEdge {
   id: string
   fromNode: string
   toNode: string
-  fromSide?: 'top' | 'right' | 'bottom' | 'left'
-  toSide?: 'top' | 'right' | 'bottom' | 'left'
-  toEnd?: 'arrow' | 'none'
+  fromSide?: Side
+  toSide?: Side
+  fromEnd?: 'none' | 'arrow'
+  toEnd?: 'none' | 'arrow'
+  color?: string
   label?: string
+  /** Tide's: draw the line moving, for something that keeps flowing (a stream, replication) */
+  animated?: boolean
+  /** Tide's: a dashed line (async, optional, or a mermaid dotted link) */
+  dashed?: boolean
+  [extra: string]: unknown
 }
 
 export interface Canvas {
   nodes: CanvasNode[]
   edges: CanvasEdge[]
+  /** Top-level fields other than nodes and edges, kept as they were */
+  extra?: Record<string, unknown>
 }
 
 export const NODE_W = 180
@@ -57,48 +97,109 @@ export const NODE_H = 72
 const GAP_X = 90
 const GAP_Y = 50
 
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : fallback)
+
+/**
+ * Reads a .canvas file. Nothing is dropped or rewritten: unknown node types and fields, edges
+ * whose ends are missing and top-level extras all survive a save. Only what would break drawing
+ * is mended (a position written as a string, a missing size).
+ */
 export function parseCanvas(raw: string): Canvas {
+  let data: unknown
   try {
-    const data = JSON.parse(raw || '{}')
-    const nodes = (Array.isArray(data.nodes) ? data.nodes : [])
-      .filter((n: CanvasNode) => n && typeof n.id === 'string')
-      .map((n: CanvasNode & { file?: string; url?: string; label?: string }) => ({
-        id: n.id,
-        type: 'text' as const,
-        // Other node types (files, links, groups) come in as text so nothing is lost from view
-        text: typeof n.text === 'string' ? n.text : n.file ?? n.url ?? n.label ?? '',
-        x: Number(n.x) || 0,
-        y: Number(n.y) || 0,
-        width: Number(n.width) || NODE_W,
-        height: Number(n.height) || NODE_H,
-        ...(n.color ? { color: String(n.color) } : {}),
-        ...(n.kind && KINDS.has(n.kind) ? { kind: n.kind } : {})
-      }))
-    const ids = new Set(nodes.map((n: CanvasNode) => n.id))
-    const edges = (Array.isArray(data.edges) ? data.edges : []).filter((e: CanvasEdge) => e && ids.has(e.fromNode) && ids.has(e.toNode))
-    return { nodes, edges }
+    data = JSON.parse(raw || '{}')
   } catch {
     return { nodes: [], edges: [] }
   }
+  if (!isObj(data)) return { nodes: [], edges: [] }
+  const nodes: CanvasNode[] = (Array.isArray(data.nodes) ? data.nodes : [])
+    .filter((n): n is Record<string, unknown> => isObj(n) && typeof n.id === 'string')
+    .map((n) => {
+      const node = { ...n, type: typeof n.type === 'string' ? n.type : 'text', x: num(n.x, 0), y: num(n.y, 0), width: num(n.width, NODE_W), height: num(n.height, NODE_H) } as CanvasNode
+      if (node.kind !== undefined && !KINDS.has(node.kind)) delete node.kind
+      return node
+    })
+  const edges: CanvasEdge[] = (Array.isArray(data.edges) ? data.edges : []).filter((e): e is CanvasEdge => isObj(e) && typeof e.id === 'string' && typeof e.fromNode === 'string' && typeof e.toNode === 'string').map((e) => ({ ...e }))
+  const { nodes: _n, edges: _e, ...rest } = data
+  return Object.keys(rest).length ? { nodes, edges, extra: rest } : { nodes, edges }
 }
 
-export const serializeCanvas = (c: Canvas) => JSON.stringify({ nodes: c.nodes, edges: c.edges }, null, '\t') + '\n'
+/** JSON Canvas as Obsidian writes it: tab-indented, nodes then edges */
+export const serializeCanvas = (c: Canvas) => JSON.stringify({ nodes: c.nodes, edges: c.edges, ...(c.extra ?? {}) }, null, '\t') + '\n'
 
-export const nodeLabel = (n: CanvasNode) => n.text.split('\n')[0].replace(/^#+\s*/, '').trim() || 'Untitled'
+/** Edges whose two ends are both on the canvas (others are kept in the file, never drawn) */
+export const liveEdges = (c: Canvas) => {
+  const ids = new Set(c.nodes.map((n) => n.id))
+  return c.edges.filter((e) => ids.has(e.fromNode) && ids.has(e.toNode))
+}
+
+export const nodeText = (n: CanvasNode) => (typeof n.text === 'string' ? n.text : '')
+
+const baseName = (p: string) => (p.split('/').pop() ?? p).replace(/\.md$/i, '')
+
+export const nodeLabel = (n: CanvasNode): string => {
+  if (n.type === 'group') return (n.label ?? '').trim() || 'Group'
+  if (n.type === 'file') return n.file ? baseName(n.file) + (n.subpath ?? '') : 'File'
+  if (n.type === 'link') return n.url ?? 'Link'
+  return nodeText(n).split('\n')[0].replace(/^#+\s*/, '').trim() || 'Untitled'
+}
+/** A text node's lines after the first */
+export const nodeDetails = (n: CanvasNode) => nodeText(n).split('\n').slice(1).join('\n').trim()
 const kindLabel = (k?: ComponentKind) => COMPONENTS.find((c) => c.kind === k)?.label.toLowerCase() ?? 'box'
+
+/** The groups a node sits in, innermost first: JSON Canvas groups hold whatever lies inside them */
+export function groupsOf(c: Canvas, n: CanvasNode): CanvasNode[] {
+  const cx = n.x + n.width / 2
+  const cy = n.y + n.height / 2
+  return c.nodes
+    .filter((g) => g.type === 'group' && g.id !== n.id && cx >= g.x && cx <= g.x + g.width && cy >= g.y && cy <= g.y + g.height && g.width * g.height > n.width * n.height)
+    .sort((a, b) => a.width * a.height - b.width * b.height)
+}
 
 /** The design as plain text: every component with its id and kind, then every connection */
 export function describeCanvas(c: Canvas): string {
   if (!c.nodes.length) return 'The canvas is empty.'
   const byId = new Map(c.nodes.map((n) => [n.id, n]))
-  const nodes = c.nodes.map((n) => {
-    const details = n.text.split('\n').slice(1).join(' ').trim()
-    return `- [${n.id}] ${nodeLabel(n)} (${kindLabel(n.kind)})${details ? `: ${details}` : ''}`
+  const parts = c.nodes.filter((n) => n.type !== 'group')
+  const groups = c.nodes.filter((n) => n.type === 'group')
+  const nodes = parts.map((n) => {
+    const details = n.type === 'text' || n.type === undefined ? nodeDetails(n).replace(/\n+/g, ' ') : ''
+    const what = n.type === 'file' ? 'file' : n.type === 'link' ? 'link' : kindLabel(n.kind)
+    return `- [${n.id}] ${nodeLabel(n)} (${what})${details ? `: ${details}` : ''}`
   })
-  const edges = c.edges.map((e) => `- ${nodeLabel(byId.get(e.fromNode)!)} [${e.fromNode}] -> ${nodeLabel(byId.get(e.toNode)!)} [${e.toNode}]${e.label ? `: ${e.label}` : ''}`)
+  const edges = liveEdges(c).map((e) => `- ${nodeLabel(byId.get(e.fromNode)!)} [${e.fromNode}] -> ${nodeLabel(byId.get(e.toNode)!)} [${e.toNode}]${e.label ? `: ${e.label}` : ''}`)
   const linked = new Set(c.edges.flatMap((e) => [e.fromNode, e.toNode]))
-  const loose = c.nodes.filter((n) => !linked.has(n.id) && n.kind !== 'note').map(nodeLabel)
-  return [`Components (${c.nodes.length}):`, ...nodes, '', `Connections (${c.edges.length}):`, ...(edges.length ? edges : ['- none']), ...(loose.length ? ['', `Not connected to anything: ${loose.join(', ')}`] : [])].join('\n')
+  const loose = parts.filter((n) => !linked.has(n.id) && n.kind !== 'note').map(nodeLabel)
+  const grouped = groups.map((g) => {
+    const inside = parts.filter((n) => groupsOf(c, n)[0]?.id === g.id).map(nodeLabel)
+    return `- [${g.id}] ${nodeLabel(g)}: ${inside.join(', ') || 'empty'}`
+  })
+  return [
+    `Components (${parts.length}):`,
+    ...nodes,
+    ...(grouped.length ? ['', `Groups (${grouped.length}):`, ...grouped] : []),
+    '',
+    `Connections (${edges.length}):`,
+    ...(edges.length ? edges : ['- none']),
+    ...(loose.length ? ['', `Not connected to anything: ${loose.join(', ')}`] : [])
+  ].join('\n')
+}
+
+/**
+ * The order a request travels the edges in, for playing a flow step by step: edges whose label
+ * starts with a number ("1. HTTPS", "2) lookup") in that order, then the rest in the order they
+ * were drawn, which is the order the tutor draws a walkthrough in.
+ */
+export function flowOrder(c: Canvas): CanvasEdge[] {
+  const step = (e: CanvasEdge) => {
+    const m = /^\s*(\d+)[.):]?\s/.exec(e.label ?? '')
+    return m ? Number(m[1]) : Infinity
+  }
+  return liveEdges(c)
+    .map((e, i) => ({ e, i, s: step(e) }))
+    .sort((a, b) => a.s - b.s || a.i - b.i)
+    .map((x) => x.e)
 }
 
 export type CanvasOp =
@@ -107,6 +208,7 @@ export type CanvasOp =
   | { op: 'update'; id: string; label?: string; kind?: string; details?: string }
   | { op: 'remove'; id: string }
   | { op: 'disconnect'; from: string; to: string }
+  | { op: 'group'; label: string; members: string[] }
 
 const slug = (s: string) =>
   s
@@ -116,7 +218,7 @@ const slug = (s: string) =>
     .slice(0, 24) || 'node'
 
 const overlaps = (c: Canvas, x: number, y: number, w: number, h: number) =>
-  c.nodes.some((n) => x < n.x + n.width + 20 && x + w + 20 > n.x && y < n.y + n.height + 20 && y + h + 20 > n.y)
+  c.nodes.some((n) => n.type !== 'group' && x < n.x + n.width + 20 && x + w + 20 > n.x && y < n.y + n.height + 20 && y + h + 20 > n.y)
 
 /** A free spot: beside the anchor if given, otherwise to the right of everything */
 export function placeNode(c: Canvas, near?: CanvasNode, side: 'right' | 'below' | 'left' | 'above' = 'right', w = NODE_W, h = NODE_H): { x: number; y: number } {
@@ -144,12 +246,14 @@ export function placeNode(c: Canvas, near?: CanvasNode, side: 'right' | 'below' 
 export function findNode(c: Canvas, ref: string): CanvasNode | undefined {
   const r = String(ref ?? '').trim()
   const lower = r.toLowerCase()
-  return c.nodes.find((n) => n.id === r) ?? c.nodes.find((n) => nodeLabel(n).toLowerCase() === lower) ?? c.nodes.find((n) => nodeLabel(n).toLowerCase().includes(lower) && lower.length > 2)
+  // A group and a component share a name ("Payments"): the component is the one meant
+  const parts = c.nodes.filter((n) => n.type !== 'group')
+  return c.nodes.find((n) => n.id === r) ?? parts.find((n) => nodeLabel(n).toLowerCase() === lower) ?? c.nodes.find((n) => nodeLabel(n).toLowerCase() === lower) ?? parts.find((n) => nodeLabel(n).toLowerCase().includes(lower) && lower.length > 2)
 }
 
 const kindOf = (k?: string): ComponentKind | undefined => {
   const v = String(k ?? '').toLowerCase().replace(/[^a-z]/g, '')
-  const alias: Record<string, ComponentKind> = { loadbalancer: 'lb', db: 'database', sql: 'database', nosql: 'database', redis: 'cache', kafka: 'queue', topic: 'queue', stream: 'queue', s3: 'storage', blob: 'storage', api: 'service', server: 'service', apigateway: 'gateway', user: 'client', browser: 'client', mobile: 'client', thirdparty: 'external', job: 'worker', consumer: 'worker' }
+  const alias: Record<string, ComponentKind> = { loadbalancer: 'lb', db: 'database', sql: 'database', nosql: 'database', redis: 'cache', kafka: 'queue', topic: 'queue', stream: 'queue', s3: 'storage', blob: 'storage', api: 'service', server: 'service', apigateway: 'gateway', user: 'client', browser: 'client', mobile: 'client', thirdparty: 'external', job: 'worker', consumer: 'worker', idea: 'concept', term: 'concept', definition: 'concept', instance: 'example', eg: 'example', open: 'question', ask: 'question' }
   return KINDS.has(v as ComponentKind) ? (v as ComponentKind) : alias[v]
 }
 
@@ -197,6 +301,11 @@ export function normalizeOp(raw: unknown): CanvasOp | null {
   const to = str('to', 'target', 'toNode', 'to_node', 'end')
   const label = str('label', 'name', 'text', 'title', 'component')
   const id = str('id', 'node', 'nodeId', 'node_id')
+  if (/^(group|cluster|box)/.test(verb)) {
+    const raw = o.members ?? o.nodes ?? o.ids ?? o.children
+    const members = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []).map((m) => String(m).trim()).filter(Boolean)
+    return members.length && (label || id) ? { op: 'group', label: (label ?? id)!, members } : null
+  }
   const op = /^(add|create|new|insert)/.test(verb)
     ? 'add'
     : /^(connect|link|edge|arrow)/.test(verb)
@@ -220,13 +329,25 @@ export function normalizeOp(raw: unknown): CanvasOp | null {
   return null
 }
 
+/** A group box drawn around some nodes, with room for its label above them */
+export function groupAround(c: Canvas, members: CanvasNode[], label: string, pad = 30): CanvasNode {
+  const taken = new Set(c.nodes.map((n) => n.id))
+  let id = `group-${slug(label)}`
+  for (let i = 2; taken.has(id); i++) id = `group-${slug(label)}-${i}`
+  const minX = Math.min(...members.map((n) => n.x)) - pad
+  const minY = Math.min(...members.map((n) => n.y)) - pad - 10
+  const maxX = Math.max(...members.map((n) => n.x + n.width)) + pad
+  const maxY = Math.max(...members.map((n) => n.y + n.height)) + pad
+  return { id, type: 'group', label, x: Math.round(minX), y: Math.round(minY), width: Math.round(maxX - minX), height: Math.round(maxY - minY) }
+}
+
 /** Applies the tutor's (or the editor's) operations in order; returns the new canvas and what happened */
 export function applyCanvasOps(start: Canvas, rawOps: unknown[]): { canvas: Canvas; log: string[] } {
   let c = start
   const log: string[] = []
   for (const op of rawOps.map(normalizeOp)) {
     if (!op) {
-      log.push('skipped an operation that has no op (add, connect, update, remove, disconnect)')
+      log.push('skipped an operation that has no op (add, connect, update, remove, disconnect, group)')
       continue
     }
     if (op.op === 'add') {
@@ -256,10 +377,15 @@ export function applyCanvasOps(start: Canvas, rawOps: unknown[]): { canvas: Canv
         log.push(`couldn't find ${op.id}`)
         continue
       }
-      const lines = n.text.split('\n')
+      const lines = nodeText(n).split('\n')
       const label = op.label?.trim() || lines[0]
       const details = op.details !== undefined ? op.details.trim() : lines.slice(1).join('\n')
       const kind = op.kind ? kindOf(op.kind) ?? n.kind : n.kind
+      if (n.type === 'group') {
+        c = { ...c, nodes: c.nodes.map((x) => (x.id === n.id ? { ...n, label: op.label?.trim() || n.label } : x)) }
+        log.push(`renamed the group ${op.label ?? ''}`)
+        continue
+      }
       const next: CanvasNode = { ...n, text: details ? `${label}\n${details}` : label, ...(kind ? { kind, color: colorFor(kind) } : {}) }
       if (!next.color) delete next.color
       c = { ...c, nodes: c.nodes.map((x) => (x.id === n.id ? next : x)) }
@@ -270,8 +396,17 @@ export function applyCanvasOps(start: Canvas, rawOps: unknown[]): { canvas: Canv
         log.push(`couldn't find ${op.id}`)
         continue
       }
-      c = { nodes: c.nodes.filter((x) => x.id !== n.id), edges: c.edges.filter((e) => e.fromNode !== n.id && e.toNode !== n.id) }
+      c = { ...c, nodes: c.nodes.filter((x) => x.id !== n.id), edges: c.edges.filter((e) => e.fromNode !== n.id && e.toNode !== n.id) }
       log.push(`removed ${nodeLabel(n)}`)
+    } else if (op.op === 'group') {
+      const members = op.members.map((m) => findNode(c, m)).filter((n): n is CanvasNode => !!n && n.type !== 'group')
+      if (!members.length) {
+        log.push(`couldn't group ${op.label}: none of ${op.members.join(', ')} is on the canvas`)
+        continue
+      }
+      const g = groupAround(c, members, op.label)
+      c = { ...c, nodes: [g, ...c.nodes] }
+      log.push(`grouped ${members.map(nodeLabel).join(', ')} as ${op.label} [${g.id}]`)
     } else if (op.op === 'disconnect') {
       const a = findNode(c, op.from)
       const b = findNode(c, op.to)
@@ -323,8 +458,8 @@ export interface DesignComparison {
  * components, in either direction.
  */
 export function compareDesigns(reference: Canvas, attempt: Canvas): DesignComparison {
-  const ref = reference.nodes.filter((n) => n.kind !== 'note')
-  const mine = attempt.nodes.filter((n) => n.kind !== 'note')
+  const ref = reference.nodes.filter((n) => n.kind !== 'note' && n.type !== 'group')
+  const mine = attempt.nodes.filter((n) => n.kind !== 'note' && n.type !== 'group')
   const pairs = ref.flatMap((r) => mine.map((m) => ({ r, m, s: similarity(r, m) }))).filter((p) => p.s >= 0.45).sort((a, b) => b.s - a.s)
   const toMine = new Map<string, CanvasNode>()
   const used = new Set<string>()

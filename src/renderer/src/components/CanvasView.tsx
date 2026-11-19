@@ -1,23 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { compareDesigns, describeCanvas, describeComparison, parseCanvas, serializeCanvas, type Canvas } from '@shared/canvas'
+import { compareDesigns, describeCanvas, describeComparison, isConceptMap, parseCanvas, serializeCanvas, type Canvas } from '@shared/canvas'
 import { parseVerdict, scorecardScore } from '@shared/interviews'
 import { createDesign } from '../lib/designs'
 import { createExampleDesign } from '../lib/examples'
 import { InterviewClock, useInterviewClock } from './InterviewClock'
-import { designInstructions, type DesignMode } from '@shared/session'
+import { designInstructions, MAP_INSTRUCTIONS, type DesignMode } from '@shared/session'
 import { fileTitle, useApp } from '../state'
 import { CanvasEditor } from './CanvasEditor'
+import { newEdges, useCanvasFiles } from './flow/canvasFiles'
 import { Composer, TurnView, useConversation } from './Conversation'
 import { Icon } from './Icon'
 import { TimeThis } from './TimeThis'
 
 const SUGGESTIONS = ['Review my design', 'Quiz me on my design', 'What breaks at 10x the load?', 'Where are the single points of failure?']
+const MAP_SUGGESTIONS = ['Check my map', 'What is missing from my map?', 'Quiz me on this map', 'Label the links I left blank']
 const TEACH_TOPICS = ['URL shortener', 'Chat app', 'Rate limiter', 'News feed', 'Market data feed', 'Payment system']
 
 /**
- * A system design canvas with the tutor beside it. The design is a .canvas file in your notes; the
- * tutor sees it on every message and can draw on it, so it can teach a design step by step, run a
- * design interview on what you draw, or review and quiz you on it.
+ * A canvas with the tutor beside it: a system design, or a concept map (one with no system parts).
+ * Either is a .canvas file in your notes; the tutor sees it on every message and can draw on it, so
+ * it can teach a design step by step, run a design interview on what you draw, check a map's links,
+ * or review and quiz you on it.
  */
 export function CanvasView({ path, start, topic, company, timed, reference }: { path: string; start?: DesignMode; topic?: string; company?: string; timed?: number; reference?: string }) {
   const app = useApp()
@@ -30,6 +33,9 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
   const [tutorOpen, setTutorOpen] = useState(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const pending = useRef<Canvas | null>(null)
+  const shown = useRef<Canvas | null>(null)
+  const [announce, setAnnounce] = useState<{ ids: string[]; nonce: number }>()
+  const fileProps = useCanvasFiles()
   const listRef = useRef<HTMLDivElement>(null)
   const started = useRef(false)
   const toastRef = useRef(app.toast)
@@ -48,8 +54,13 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
         .read(path)
         .then((raw) => {
           pending.current = null
-          setCanvas(parseCanvas(raw))
+          const next = parseCanvas(raw)
+          // The connections the tutor just drew play once, in the order a request takes them
+          const added = shown.current ? newEdges(shown.current, next) : []
+          shown.current = next
+          setCanvas(next)
           setVersion((v) => v + 1)
+          if (added.length) setAnnounce({ ids: added, nonce: Date.now() })
         })
         .catch(() => setCanvas({ nodes: [], edges: [] })),
     [path]
@@ -67,6 +78,7 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
   useEffect(() => () => void flush(), [flush])
 
   const change = (next: Canvas) => {
+    shown.current = next
     setCanvas(next)
     pending.current = next
     clearTimeout(saveTimer.current)
@@ -85,6 +97,9 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
     })
   }, [load])
 
+  // A concept map, not a system: its own welcome and tutor (an empty canvas opened from a design link stays a design)
+  const map = !!canvas?.nodes.length && isConceptMap(canvas) && !start
+
   const send = async (text: string, as: DesignMode = mode, comparison?: string) => {
     await flush()
     if (as !== mode) setMode(as)
@@ -93,7 +108,8 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
     const reference = original ? `${describeCanvas(original)}${comparison ? `\n\nThe app's comparison of their drawing with it:\n${comparison}` : ''}` : undefined
     // In a timed round the time left goes with each message, so the interviewer can pace it
     const content = isTimed && !text.startsWith('[time]') ? `[${clock.left() || timed} min left] ${text}` : text
-    if (await convo.send(content, { scope: { kind: 'none' }, instructions: designInstructions(as, topic || learn || undefined, company, { timed: isTimed ? timed : undefined, reference }), canvasPath: path })) setInput('')
+    const instructions = map && as === 'free' ? MAP_INSTRUCTIONS : designInstructions(as, topic || learn || undefined, company, { timed: isTimed ? timed : undefined, reference })
+    if (await convo.send(content, { scope: { kind: 'none' }, instructions, canvasPath: path })) setInput('')
   }
   sendRef.current = (text) => send(text)
 
@@ -154,7 +170,7 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
       <header className="doc-toolbar drag lab-head">
         <div className="crumbs no-drag">
           <span className="crumb current">{title}</span>
-          <span className="muted lab-sub">{mode === 'interview' ? `Design interview${company ? `, ${company}` : ''}` : mode === 'teach' ? 'Lesson' : mode === 'recall' ? 'From memory' : 'System design'}</span>
+          <span className="muted lab-sub">{mode === 'interview' ? `Design interview${company ? `, ${company}` : ''}` : mode === 'teach' ? 'Lesson' : mode === 'recall' ? 'From memory' : map ? 'Concept map' : 'System design'}</span>
         </div>
         <div className="toolbar-actions no-drag">
           {mode === 'interview' && timed && <InterviewClock remaining={clock.remaining} total={timed} />}
@@ -178,7 +194,7 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
         </div>
       </header>
       <div className="lab-body">
-        <section className="design-canvas">{canvas ? <CanvasEditor canvas={canvas} onChange={change} version={version} onExample={mode === 'recall' ? undefined : openExample} /> : <div className="ide-empty muted">Opening…</div>}</section>
+        <section className="design-canvas">{canvas ? <CanvasEditor canvas={canvas} onChange={change} version={version} onExample={mode === 'recall' ? undefined : openExample} announce={announce} {...fileProps} /> : <div className="ide-empty muted">Opening…</div>}</section>
         {tutorOpen && (
           <aside className="lab-tutor no-drag" aria-label="Tutor">
             <div className="lab-thread" ref={listRef}>
@@ -188,7 +204,20 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
                   <p className="muted small">{original ? `${original.nodes.length} components in the original. Draw what you remember, then press Check my drawing.` : 'Opening the original…'}</p>
                 </div>
               )}
-              {convo.turns.length === 0 && mode !== 'recall' && (
+              {convo.turns.length === 0 && mode !== 'recall' && map && (
+                <div className="lab-welcome">
+                  <p className="lab-welcome-title">Your study partner.</p>
+                  <p className="muted small">Sees your map and can draw on it.</p>
+                  <div className="lab-topics">
+                    {MAP_SUGGESTIONS.map((q) => (
+                      <button key={q} className="pill" onClick={() => send(q, 'free')}>
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {convo.turns.length === 0 && mode !== 'recall' && !map && (
                 <div className="lab-welcome">
                   <p className="lab-welcome-title">Your design partner.</p>
                   <p className="muted small">Sees your canvas and can draw on it.</p>
@@ -225,7 +254,7 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
                 <TurnView key={t.id} turn={t} />
               ))}
             </div>
-            <Composer value={input} onChange={setInput} onSend={() => send(input)} busy={convo.busy} onStop={convo.stop} web={convo.web} onWeb={convo.setWeb} placeholder="Ask about your design" />
+            <Composer value={input} onChange={setInput} onSend={() => send(input)} busy={convo.busy} onStop={convo.stop} web={convo.web} onWeb={convo.setWeb} placeholder={map ? 'Ask about your map' : 'Ask about your design'} />
           </aside>
         )}
       </div>

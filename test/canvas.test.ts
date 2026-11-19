@@ -25,11 +25,14 @@ describe('system design canvas', () => {
     expect(text).toContain('Quote service [quote-service] -> Redis [redis]: read')
   })
 
-  it('round-trips through JSON Canvas and tolerates other apps’ nodes', () => {
+  it('keeps other apps’ nodes and dangling edges as they are', () => {
     const raw = JSON.stringify({ nodes: [{ id: 'a', type: 'file', file: 'Notes/Kafka.md', x: 0, y: 0, width: 200, height: 100 }, { id: 'b', type: 'text', text: 'DB', x: 300, y: 0, width: 180, height: 72, kind: 'database' }], edges: [{ id: 'e', fromNode: 'a', toNode: 'b' }, { id: 'x', fromNode: 'a', toNode: 'missing' }] })
     const c = parseCanvas(raw)
-    expect(c.nodes[0].text).toBe('Notes/Kafka.md')
-    expect(c.edges).toHaveLength(1)
+    expect(c.nodes[0].file).toBe('Notes/Kafka.md')
+    expect(c.nodes[0].text).toBeUndefined()
+    expect(c.edges).toHaveLength(2)
+    expect(describeCanvas(c)).toContain('Kafka (file)')
+    expect(describeCanvas(c)).toContain('Connections (1)')
     expect(parseCanvas(serializeCanvas(c))).toEqual(c)
     expect(parseCanvas('not json')).toEqual({ nodes: [], edges: [] })
   })

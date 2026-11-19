@@ -128,10 +128,10 @@ const MEMORY_TOOLS = [
   tool('forget', 'Remove something you remember about the student. Call it when they ask you to forget or correct something you remember.', { about: { type: 'string', description: 'What to forget, in a few words' } }, ['about'])
 ]
 
-const CANVAS_READ = tool('canvas_read', "Read the student's system design canvas: every component with its id and kind, and every connection.", {}, [])
+const CANVAS_READ = tool('canvas_read', "Read the canvas open beside the lesson (a concept map, a diagram or a system design, drawn by the student, you or both): every part with its id and kind, and every connection with its label.", {}, [])
 const CANVAS_EDIT = tool(
   'canvas_edit',
-  "Draw on the student's system design canvas. Operations run in order; refer to components by id or by name. Kinds: client, lb (load balancer), gateway, service, worker, database, cache, queue, storage, cdn, external, note.",
+  "Draw on the canvas beside the lesson, which the student sees and can edit too: concept maps and diagrams as well as system designs. Use it when a picture helps (how ideas relate, a process, a structure) or the student asks for one; read it first when the student may have drawn on it. Operations run in order; refer to parts by id or by name. Concept map kinds: concept (an idea), example, question (something still open), note; label each connection with how the two relate (\"is a kind of\", \"causes\", \"needs\"). System kinds: client, lb (load balancer), gateway, service, worker, database, cache, queue, storage, cdn, external. group draws a labelled box around members (a region, a cluster, one family of ideas).",
   {
     ops: {
       type: 'array',
@@ -139,15 +139,16 @@ const CANVAS_EDIT = tool(
       items: {
         type: 'object',
         properties: {
-          op: { type: 'string', enum: ['add', 'connect', 'update', 'remove', 'disconnect'] },
-          label: { type: 'string', description: 'add/update: the component name' },
+          op: { type: 'string', enum: ['add', 'connect', 'update', 'remove', 'disconnect', 'group'] },
+          label: { type: 'string', description: 'add/update: the name of the part; connect: how the two relate, or what passes between them' },
           kind: { type: 'string' },
           details: { type: 'string', description: 'add/update: a short second line, e.g. "Postgres, read replicas"' },
           id: { type: 'string', description: 'update/remove: which component' },
           near: { type: 'string', description: 'add: place it beside this component' },
           side: { type: 'string', enum: ['right', 'below', 'left', 'above'] },
           from: { type: 'string' },
-          to: { type: 'string' }
+          to: { type: 'string' },
+          members: { type: 'array', items: { type: 'string' }, description: 'group: the components inside it' }
         },
         required: ['op']
       }
@@ -1146,7 +1147,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     if (!ctx.canvasPath) return 'No canvas is open.'
     const current = parseCanvas(await readText(ctx.canvasPath).catch(() => ''))
     if (call.name === 'canvas_read') {
-      const id = ctx.step({ kind: 'canvas', label: 'Looking at your design', status: 'running', depth })
+      const id = ctx.step({ kind: 'canvas', label: 'Looking at your canvas', status: 'running', depth })
       ctx.updateStep(id, { status: 'done', detail: `${current.nodes.length} components` })
       return describeCanvas(current)
     }
@@ -1833,7 +1834,9 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const figures = engine === 'claude' && !req.warmOnly ? await import('./pdfFigures').then((f) => f.figuresForTurn(req.chatId ?? req.labId ?? 'chat', ctx.sources, Math.min(f.MAX_PAGES, MAX_IMAGES - images.length))).catch(() => []) : []
   const screen = terminalId ? readTerminal(terminalId, 5000).split('\n').slice(-45).join('\n').trim() : ''
   const scratchFile = scratch?.file ? await import('fs').then((f) => f.promises.readFile(join(scratch.root, scratch.file), 'utf8')).catch(() => '') : ''
-  const design = req.canvasPath ? describeCanvas(parseCanvas(await readText(req.canvasPath).catch(() => ''))) : ''
+  // The canvas beside the lesson, when anything is on it (an empty one is only noise)
+  const drawn = req.canvasPath ? parseCanvas(await readText(req.canvasPath).catch(() => '')) : null
+  const design = drawn?.nodes.length ? describeCanvas(drawn) : ''
   // Asked to be set work: say so plainly, small models otherwise just answer the question
   const userTurns = req.messages.filter((m) => m.role === 'user').length
   // Not inside a structured session (a lesson, quiz or interview runs its own script)
@@ -1877,7 +1880,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
       : assigning
       ? 'The student is asking you to set them work in Things 4. Call things_assign now with a full brief (## Goal, ## What to do, ## Deliverable, ## How it will be checked, ## Read), steps and the due date they gave. Do NOT solve or hint at the answer to work you assign; afterwards just confirm in one or two lines what you set and when it is due.'
       : '',
-    design ? `The student's system design canvas right now:\n${design}` : '',
+    design ? `The canvas beside the lesson right now (the student can draw on it too):\n${design}` : '',
     screen ? `The student's terminal right now (most recent at the bottom):\n\`\`\`\n${screen}\n\`\`\`${typedNotRun(terminalId!) ? `\n("${typedNotRun(terminalId!)}" at the prompt is waiting for Return: not run yet, nothing is running.)` : ''}` : '',
     scratch?.file ? `Their scratchpad (a small editor and their own shell, open beside you; you can read it, never type in it) has ${scratch.file} open:\n\`\`\`\n${scratchFile.slice(0, 6000)}\n\`\`\`` : '',
     // Setting or marking work from a general chat: notes picked by keyword are only noise there
@@ -1965,13 +1968,13 @@ function taskLink(open: Record<string, unknown> | null, kind: string, title: str
 
 /** The tutor's tools Tide serves to Claude over MCP: the same definitions and handlers Gemma uses */
 // terminal_read reads the lesson's Workspace terminal (the turn's terminalId); it never types into it
-export const MCP_TUTOR_TOOLS = [...NOTE_TOOLS, CODE_TOOL, SQL_TOOL, LOAD_TABLE_TOOL, STUDY_PLAN, MEMORY_TOOLS[0], TERMINAL_READ, WORKSPACE_FILE] as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }[]
+export const MCP_TUTOR_TOOLS = [...NOTE_TOOLS, CODE_TOOL, SQL_TOOL, LOAD_TABLE_TOOL, STUDY_PLAN, MEMORY_TOOLS[0], TERMINAL_READ, WORKSPACE_FILE, CANVAS_READ, CANVAS_EDIT] as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }[]
 
 /** The Metabase tool, served to Claude over MCP while a Metabase is connected (Settings › Connections) */
 export const MCP_METABASE_TOOL = METABASE as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
 
 /** What a tool call from outside the loop needs: where its steps and sources go */
-export type ToolContext = Pick<LoopContext, 'signal' | 'sources' | 'emitSources' | 'step' | 'updateStep' | 'web' | 'chatId' | 'labId'> & Partial<Pick<LoopContext, 'terminalId'>>
+export type ToolContext = Pick<LoopContext, 'signal' | 'sources' | 'emitSources' | 'step' | 'updateStep' | 'web' | 'chatId' | 'labId'> & Partial<Pick<LoopContext, 'terminalId' | 'canvasPath'>>
 
 /** Runs one of Tide's tools by name, as the tutor's loop would, and returns what the model reads */
 export function runTideTool(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
