@@ -611,7 +611,7 @@ export default function App() {
   else if (view.kind === 'ipynb') main = <JupyterView key={view.abs} refIn={{ abs: view.abs }} />
   else if (view.kind === 'help') main = <HelpView section={view.section} />
   else if (view.kind === 'sharp') main = <SharpView key={`${view.category}:${view.card ?? ''}:${view.ref ?? ''}:${view.nonce ?? ''}`} category={view.category} method={view.method} card={view.card} bank={view.bank} reference={view.ref} />
-  else if (view.kind === 'interview') main = <InterviewTarget key={`${view.slug}:${view.drill?.item ?? ''}:${view.nonce ?? ''}`} slug={view.slug} drill={view.drill} mode={view.mode} />
+  else if (view.kind === 'interview') main = <InterviewTarget key={`${view.slug}:${view.drill?.item ?? ''}:${view.script ?? ''}:${view.nonce ?? ''}`} slug={view.slug} drill={view.drill} mode={view.mode} script={view.script} />
   else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}:${view.live ?? ''}`} mode={view.mode} review={view.review} live={view.live} />
   else if (view.kind === 'exam') main = <ExamView key={`${view.topic}:${view.nonce ?? ''}`} scope={view.scope} topic={view.topic} options={view.options} view={view} />
   else if (view.kind === 'settings') main = <SettingsView section={view.section} />

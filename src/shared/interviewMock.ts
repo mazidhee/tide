@@ -38,6 +38,8 @@ export interface MockQuestion {
   route?: string
   /** The learner's own facts for it */
   outline?: string
+  /** Their locked script for it (shared/interviewScript): the answer they meant to give */
+  script?: string
 }
 
 export interface MockScenario {
@@ -1169,6 +1171,10 @@ export function markPrompt(input: MockTargetInput, plan: Plan, lines: Line[]): s
     input.round.notes ? `What the real round is like: ${input.round.notes}` : '',
     scenario ? `Scenario rubric (what a strong answer covers): ${scenario.s.rubric.join('; ')}` : '',
     input.presentation ? `Presentation brief checklist: ${input.presentation.checklist.join('; ')}` : '',
+    (() => {
+      const asked = plan.items.filter((i): i is Extract<PlanItem, { type: 'question' }> => i.type === 'question' && !!i.q.script)
+      return asked.length ? `The candidate's intended answers (scripts they wrote and locked beforehand). For these items, compare what they said with the script: which of its points they made, dropped or changed, and whether they talked or recited. Mention it in the item's note:\n${asked.map((i) => `[${i.id}] ${i.q.script!.slice(0, 2500)}`).join('\n\n')}` : ''
+    })(),
     `Measured per item (seconds spoken, words, words a minute, filler words): ${m.map((x) => `${x.item}: ${x.seconds}s, ${x.words}w, ${x.wpm || '–'}wpm, ${x.fillers} fillers`).join(' | ')}`,
     `Transcript:\n${lines.map(stamp).join('\n')}`,
     `Mark every item the candidate answered (use the item ids above; scenario parts "scenario:x#2" are one item "scenario:x"; skip "ask-them" and "close"). Scores 0–4: structure (a clear route, in order), specifics (real detail, numbers), ownership (what they did and the result), risk (only for scenario, technical and risk-related answers: did they find the risks, mitigate, escalate), clarity (presentation and Q&A only). 2 is acceptable, 3 good, 4 what gets an offer.`,

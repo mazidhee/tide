@@ -17,6 +17,15 @@ export const interviewApi: InterviewApi = {
   clarify: invoke('interview:clarify'),
   gather: invoke('interview:gather'),
   generate: invoke('interview:generate'),
+  script: invoke('interview:script'),
+  scriptStart: invoke('interview:scriptStart'),
+  scriptSave: invoke('interview:scriptSave'),
+  scriptRevise: invoke('interview:scriptRevise'),
+  scriptPick: invoke('interview:scriptPick'),
+  scriptRestore: invoke('interview:scriptRestore'),
+  scriptLock: invoke('interview:scriptLock'),
+  voiceAdd: invoke('interview:voiceAdd'),
+  sayIt: invoke('interview:sayIt'),
   onProgress: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, p: { slug: string; step: string }) => cb(p)
     ipcRenderer.on('interview:progress', listener)

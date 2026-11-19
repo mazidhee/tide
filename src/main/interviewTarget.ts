@@ -63,7 +63,7 @@ import { withUsage } from './usageLog'
 
 export interface InterviewModels {
   ready(): Promise<boolean>
-  once(prompt: string, system: string, role: 'mark' | 'teach', job: string, signal: AbortSignal): Promise<string>
+  once(prompt: string, system: string, role: 'mark' | 'teach' | 'hard' | 'background', job: string, signal: AbortSignal): Promise<string>
 }
 
 const realModels: InterviewModels = {
@@ -80,6 +80,8 @@ const realModels: InterviewModels = {
 
 let models: InterviewModels = realModels
 export const setInterviewModels = (m: InterviewModels | null) => (models = m ?? realModels)
+/** The models the interview jobs use now (Claude, or a test's stand-in) */
+export const interviewModels = () => models
 
 const progress = (slug: string, step: string) => {
   for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('interview:progress', { slug, step })
@@ -99,15 +101,15 @@ async function folders(): Promise<Map<string, string>> {
   return out
 }
 
-async function folderOf(slug: string): Promise<string> {
+export async function folderOf(slug: string): Promise<string> {
   const f = (await folders()).get(slug)
   if (!f) throw new Error('That interview target isn’t in your vault any more.')
   return f
 }
 
-const readOr = (rel: string) => readText(rel).catch(() => '')
+export const readOr = (rel: string) => readText(rel).catch(() => '')
 
-async function readFiles(folder: string): Promise<{ files: TargetFiles; has: TargetBundle['has'] }> {
+export async function readFiles(folder: string): Promise<{ files: TargetFiles; has: TargetBundle['has'] }> {
   const raw = await readText(`${folder}/target.md`)
   let data: Record<string, unknown> = {}
   let body = raw
@@ -147,7 +149,7 @@ async function readProgress(slug: string): Promise<Progress> {
   }
 }
 
-async function readContext(slug: string): Promise<(GatheredContext & { texts?: string[] }) | null> {
+export async function readContext(slug: string): Promise<(GatheredContext & { texts?: string[] }) | null> {
   try {
     return JSON.parse(await readText(contextPath(slug)))
   } catch {
@@ -394,7 +396,7 @@ export async function gather(slug: string): Promise<GatheredContext> {
 }
 
 /** The gathered sources as one block for a prompt */
-async function contextText(slug: string, max = 60_000): Promise<string> {
+export async function contextText(slug: string, max = 60_000): Promise<string> {
   const ctx = await readContext(slug)
   if (!ctx?.texts?.length) return ''
   let out = ''
@@ -415,7 +417,7 @@ async function backup(slug: string, rel: string): Promise<string | undefined> {
   return dir
 }
 
-const NO_INVENTING = `Use only facts in the material below: the learner's CV, their notes and the target's files. Never invent a figure, date, employer, tool, name or outcome. Where a detail is missing, write PRACTICE VERSION: <what the learner must supply> in its place, or list it under Gaps.`
+export const NO_INVENTING = `Use only facts in the material below: the learner's CV, their notes and the target's files. Never invent a figure, date, employer, tool, name or outcome. Where a detail is missing, write PRACTICE VERSION: <what the learner must supply> in its place, or list it under Gaps.`
 
 /** Fill stories.md from the CV: new stories only, after the ones already there */
 async function writeStories(slug: string, folder: string, files: TargetFiles): Promise<GenerateResult> {
@@ -607,7 +609,7 @@ Criteria: ${CRITERIA[i.drill].map((c) => `${c.id} (${c.label})`).join(', ')}
 Time: ${Math.round(i.seconds)} seconds ${i.drill === 'talk' ? `(target ${i.minutes ?? 15} minutes)` : ''}
 
 Question: ${i.question}
-${i.route?.length ? `Route: ${i.route.join(' → ')}\n` : ''}${i.anchors?.length ? `Anchors of the story it should use: ${i.anchors.join(', ')}\n` : ''}${i.outline?.length ? `The candidate's own outline: ${i.outline.join('; ')}\n` : ''}${i.evidence?.length ? `The candidate's real facts: ${i.evidence.join('; ')}\n` : ''}${i.rubric?.length ? `Rubric:\n${i.rubric.map((r) => `- (${r.group}) ${r.text}`).join('\n')}\n` : ''}${i.point ? `The point a strong answer makes: ${i.point}\n` : ''}${i.checklist?.length ? `The brief:\n${i.checklist.map((c) => `- ${c}`).join('\n')}\n` : ''}${ctx ? `\nTheir material:\n${ctx}\n` : ''}
+${i.route?.length ? `Route: ${i.route.join(' → ')}\n` : ''}${i.anchors?.length ? `Anchors of the story it should use: ${i.anchors.join(', ')}\n` : ''}${i.outline?.length ? `The candidate's own outline: ${i.outline.join('; ')}\n` : ''}${i.evidence?.length ? `The candidate's real facts: ${i.evidence.join('; ')}\n` : ''}${i.rubric?.length ? `Rubric:\n${i.rubric.map((r) => `- (${r.group}) ${r.text}`).join('\n')}\n` : ''}${i.point ? `The point a strong answer makes: ${i.point}\n` : ''}${i.checklist?.length ? `The brief:\n${i.checklist.map((c) => `- ${c}`).join('\n')}\n` : ''}${ctx ? `\nTheir material:\n${ctx}\n` : ''}${i.script ? `\nTheir intended answer (the script they wrote and locked; compare what they said with it: which of its points they made, dropped or changed, and whether they recited it or talked):\n${i.script.slice(0, 6000)}\n${i.beats?.length ? `Its beats: ${i.beats.join('; ')}\n` : ''}` : ''}
 Phrases code flagged as sounding scripted: ${aiTells(i.answer).map((t) => t.phrase).join(', ') || 'none'}
 
 The answer${i.drill === 'talk' ? ' (transcript)' : ''}:

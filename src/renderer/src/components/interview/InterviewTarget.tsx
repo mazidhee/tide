@@ -21,6 +21,7 @@ import {
 import { useApp, type View } from '../../state'
 import { Icon } from '../Icon'
 import { Drill } from './Drill'
+import { ScriptWorkspace } from './ScriptWorkspace'
 
 /**
  * One interview target's page (docs/plans/interview-target.md): when it is, how ready you are,
@@ -95,9 +96,9 @@ function Section({ id, title, count, action, children, open: initial = false }: 
 }
 
 /** A row that starts a drill: what it is, a small meta line, the latest mark */
-function Row({ id, title, meta, mark, tries, onClick }: { id?: string; title: string; meta?: string; mark: number | null; tries: number; onClick(): void }) {
+function Row({ id, title, meta, mark, tries, onClick, aside }: { id?: string; title: string; meta?: string; mark: number | null; tries: number; onClick(): void; aside?: React.ReactNode }) {
   return (
-    <li>
+    <li className={aside ? 'it-row-with' : undefined}>
       <button className="it-row" onClick={onClick}>
         {id && <span className="it-row-id">{id}</span>}
         <span className="it-row-main">
@@ -109,6 +110,7 @@ function Row({ id, title, meta, mark, tries, onClick }: { id?: string; title: st
         </span>
         <Icon name="chevron" size={11} className="it-row-go" />
       </button>
+      {aside}
     </li>
   )
 }
@@ -129,7 +131,7 @@ function Slot({ slot, onReview }: { slot: ReviewSlot; onReview(): void }) {
   )
 }
 
-export function InterviewTarget({ slug, drill, mode: wantMode }: { slug: string; drill?: { kind: DrillKind; item: string }; mode?: 'teach' | 'interview' }) {
+export function InterviewTarget({ slug, drill, mode: wantMode, script }: { slug: string; drill?: { kind: DrillKind; item: string }; mode?: 'teach' | 'interview'; script?: string }) {
   const app = useApp()
   const [b, setB] = useState<TargetBundle | null | undefined>(undefined)
   const [busy, setBusy] = useState('')
@@ -209,13 +211,25 @@ export function InterviewTarget({ slug, drill, mode: wantMode }: { slug: string;
 
   const saved = (p: Progress) => setB((cur) => (cur ? { ...cur, progress: p } : cur))
 
+  const writeScript = (questionId: string) => app.setView({ kind: 'interview', slug, script: questionId, nonce: Date.now() })
+
+  // ---------- A question's script ----------
+  if (script)
+    return (
+      <div className="page it-page">
+        <div className="page-inner sc-wide">
+          <ScriptWorkspace slug={slug} target={b} questionId={script} onClose={() => app.setView({ kind: 'interview', slug, mode: 'interview', nonce: Date.now() })} />
+        </div>
+      </div>
+    )
+
   // ---------- A drill ----------
   if (drill) {
     const next = plan.find((p) => p.item !== drill.item && p.drill !== 'cards' && p.drill !== 'teach')
     return (
       <div className="page it-page">
         <div className="page-inner narrow">
-          <Drill slug={slug} bundle={b} kind={drill.kind} item={drill.item} onSaved={saved} onClose={() => app.setView({ kind: 'interview', slug, mode: 'interview', nonce: Date.now() })} onNext={next ? () => startPlan(next) : undefined} />
+          <Drill slug={slug} bundle={b} kind={drill.kind} item={drill.item} onSaved={saved} onScript={writeScript} onClose={() => app.setView({ kind: 'interview', slug, mode: 'interview', nonce: Date.now() })} onNext={next ? () => startPlan(next) : undefined} />
         </div>
       </div>
     )
@@ -544,7 +558,21 @@ export function InterviewTarget({ slug, drill, mode: wantMode }: { slug: string;
                   {questions.map((q) => {
                     const m = markOf(`q:${q.id}`)
                     const round = rounds.find((r) => r.id === q.round)?.name
-                    return <Row key={q.id} id={q.id} title={q.text} meta={[q.kind.replace('-', ' '), round, q.model ? 'model answer' : ''].filter(Boolean).join(' · ')} {...m} onClick={() => go(q.kind === 'cv' ? 'cv' : 'behavioural', `q:${q.id}`)} />
+                    return (
+                      <Row
+                        key={q.id}
+                        id={q.id}
+                        title={q.text}
+                        meta={[q.kind.replace('-', ' '), round, q.model ? 'model answer' : ''].filter(Boolean).join(' · ')}
+                        {...m}
+                        onClick={() => go(q.kind === 'cv' ? 'cv' : 'behavioural', `q:${q.id}`)}
+                        aside={
+                          <button className="it-row-script" onClick={() => writeScript(q.id)} title="Write my script" aria-label={`Write my script for ${q.id}`}>
+                            <Icon name="compose" size={13} />
+                          </button>
+                        }
+                      />
+                    )
                   })}
                 </ul>
               ) : (

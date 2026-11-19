@@ -70,6 +70,7 @@ import { registerWork } from './workProjects'
 import { registerInterviewMock } from './interviewMock'
 import { registerPacks, stopPacks } from './packs'
 import { registerInterview } from './interviewTarget'
+import { registerInterviewScripts } from './interviewScript'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, speedStatus } from './modelServer'
@@ -250,6 +251,7 @@ function registerIpc() {
   registerInterviewMock()
   registerPacks()
   registerInterview()
+  registerInterviewScripts()
   registerBackups(handle)
   registerBugReports()
   registerWeekProgress(handle)

@@ -27,7 +27,7 @@ import { Icon } from '../Icon'
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
 /** Answer by voice: records, times, writes it out on this Mac */
-function useRecorder() {
+export function useRecorder() {
   const [state, setState] = useState<'idle' | 'listening' | 'writing'>('idle')
   const [elapsed, setElapsed] = useState(0)
   const [hint, setHint] = useState('')
@@ -87,7 +87,7 @@ function useRecorder() {
 }
 
 /** How long it ran against the window it should land in */
-function TimeBar({ seconds, window: [lo, hi], spoken }: { seconds: number; window: [number, number]; spoken: boolean }) {
+export function TimeBar({ seconds, window: [lo, hi], spoken }: { seconds: number; window: [number, number]; spoken: boolean }) {
   const max = hi * 1.4
   const tone = seconds < lo ? 'short' : seconds > hi ? 'long' : 'ok'
   return (
@@ -235,7 +235,7 @@ function specOf(b: TargetBundle, drill: DrillKind, item: string): Spec | null {
   return null
 }
 
-export function Drill({ slug, bundle, kind, item, onSaved, onClose, onNext }: { slug: string; bundle: TargetBundle; kind: DrillKind; item: string; onSaved(p: Progress): void; onClose(): void; onNext?: () => void }) {
+export function Drill({ slug, bundle, kind, item, onSaved, onClose, onNext, onScript }: { slug: string; bundle: TargetBundle; kind: DrillKind; item: string; onSaved(p: Progress): void; onClose(): void; onNext?: () => void; onScript?: (questionId: string) => void }) {
   const spec = useMemo(() => specOf(bundle, kind, item), [bundle, kind, item])
   if (!spec) return <p className="muted">That item isn’t in the target’s files any more.</p>
   return (
@@ -249,13 +249,13 @@ export function Drill({ slug, bundle, kind, item, onSaved, onClose, onNext }: { 
       ) : spec.drill === 'firm' ? (
         <FirmDrill slug={slug} bundle={bundle} spec={spec} onSaved={onSaved} onClose={onClose} />
       ) : (
-        <AnswerDrill slug={slug} bundle={bundle} spec={spec} onSaved={onSaved} onClose={onClose} onNext={onNext} />
+        <AnswerDrill slug={slug} bundle={bundle} spec={spec} onSaved={onSaved} onClose={onClose} onNext={onNext} onScript={item.startsWith('q:') && onScript ? () => onScript(item.slice(2)) : undefined} />
       )}
     </section>
   )
 }
 
-function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext }: { slug: string; bundle: TargetBundle; spec: Spec; onSaved(p: Progress): void; onClose(): void; onNext?: () => void }) {
+function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext, onScript }: { slug: string; bundle: TargetBundle; spec: Spec; onSaved(p: Progress): void; onClose(): void; onNext?: () => void; onScript?: () => void }) {
   const scenario = spec.drill === 'scenario' ? bundle.files.scenarios.find((c) => `scenario:${c.id}` === spec.item) : undefined
   const [turns, setTurns] = useState<{ q: string; a: string; seconds: number | null; by?: string }[]>([])
   const [current, setCurrent] = useState(spec.drill === 'scenario' ? scenario?.parts[0] ?? spec.question : spec.question)
@@ -267,6 +267,19 @@ function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext }: { slug: s
   const [error, setError] = useState('')
   const [ask, setAsk] = useState('')
   const [asked, setAsked] = useState<{ q: string; a: string }[]>([])
+  // The learner's locked script for this question: marked as their intended answer
+  const [script, setScript] = useState<{ text: string; beats: string[] } | null>(null)
+  const [showScript, setShowScript] = useState(false)
+  useEffect(() => {
+    if (!spec.item.startsWith('q:')) return
+    window.tide.interview
+      .script(slug, spec.item.slice(2))
+      .then((b) => {
+        const text = b.script?.status === 'locked' ? b.script.versions.find((v) => v.n === b.script!.lockedVersion)?.text : undefined
+        setScript(text ? { text, beats: b.script!.beats } : null)
+      })
+      .catch(() => setScript(null))
+  }, [slug, spec.item])
   const probes = spec.drill === 'cv' ? 2 : 0
   const parts = scenario?.parts.length ?? 1
   const step = turns.length
@@ -278,7 +291,7 @@ function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext }: { slug: s
     const secs = all.reduce((n, t) => n + (t.seconds ?? spokenSeconds(t.a)), 0)
     const spoken = all.some((t) => t.seconds !== null)
     try {
-      const m = await window.tide.interview.mark(slug, { drill: spec.drill, question: spec.question, answer: text, seconds: spec.drill === 'scenario' ? secs / Math.max(1, all.length) : secs, ...spec.input })
+      const m = await window.tide.interview.mark(slug, { drill: spec.drill, question: spec.question, answer: text, seconds: spec.drill === 'scenario' ? secs / Math.max(1, all.length) : secs, ...spec.input, ...(script ? { script: script.text, beats: script.beats } : {}) })
       setMark(m)
       const p = await window.tide.interview.attempt(slug, attemptOf({ item: spec.item, area: spec.area, drill: spec.drill, mark: m, seconds: secs, spoken, answer: text, at: Date.now() }))
       onSaved(p)
@@ -332,7 +345,15 @@ function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext }: { slug: s
   return (
     <>
       <header className="it-drill-head">
-        <span className="it-eyebrow">{spec.eyebrow}</span>
+        <div className="it-drill-eyebrow-row">
+          <span className="it-eyebrow">{spec.eyebrow}</span>
+          {onScript && (
+            <button className="link-btn small it-script-link" onClick={onScript}>
+              <Icon name="compose" size={12} />
+              {script ? 'My script' : 'Write my script'}
+            </button>
+          )}
+        </div>
         <h1 className="it-drill-q">{spec.drill === 'scenario' ? scenario?.title : spec.question}</h1>
         {route.length > 0 && (
           <ol className="it-route" aria-label="Route">
@@ -489,6 +510,15 @@ function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext }: { slug: s
               </ul>
             </div>
           )}
+          {script && (
+            <div className="it-model">
+              <button className="link-btn" onClick={() => setShowScript((x) => !x)}>
+                <Icon name="chevron" size={11} className={showScript ? 'rot-90' : ''} />
+                {showScript ? 'Hide your script' : 'Compare with your script'}
+              </button>
+              {showScript && <p className="it-model-text sc-script">{script.text}</p>}
+            </div>
+          )}
           {modelHtml && (
             <div className="it-model">
               <button className="link-btn" onClick={() => setShowModel((s) => !s)}>
@@ -524,6 +554,12 @@ function AnswerDrill({ slug, bundle, spec, onSaved, onClose, onNext }: { slug: s
             >
               Try again
             </button>
+            {onScript && (
+              <button className="btn ghost" onClick={onScript}>
+                <Icon name="compose" size={13} />
+                {script ? 'Open my script' : 'Write my script'}
+              </button>
+            )}
             <span className="it-grow" />
             <button className="btn" onClick={onClose}>
               Done
