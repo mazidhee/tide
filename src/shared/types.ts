@@ -1390,6 +1390,8 @@ export interface TideApi {
   }
   lecture: {
     prepare(req: { reply: string; mode?: import('./lectureScript').LectureMode; kokoroVoice?: string }): Promise<LectureState>
+    /** A simulation's tour, said step by step as it runs */
+    narrate(req: { says: string[]; kokoroVoice?: string }): Promise<LectureState>
     piece(id: string, i: number): Promise<Uint8Array | null>
     status(): Promise<{ ready: boolean; detail: string }>
     warm(): Promise<void>
@@ -1688,7 +1690,8 @@ export interface LectureState {
   script?: string
   scriptBy?: 'claude' | 'rules'
   scriptMs?: number
-  pieces: { text: string; engine: 'fish' | 'kokoro'; ready: boolean; failed?: boolean; ms?: number; secs?: number }[]
+  /** step: a simulation's tour step the piece is said at (a narration, not a reply) */
+  pieces: { text: string; engine: 'fish' | 'kokoro'; ready: boolean; failed?: boolean; ms?: number; secs?: number; step?: number }[]
   startedAt: number
   firstAudioMs?: number
   totalMs?: number

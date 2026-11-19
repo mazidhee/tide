@@ -34,7 +34,9 @@ export function PlayerBar({ path, onVoice }: { path: string; onVoice(v: BookVoic
       <button className="rr-player-skip" onClick={() => skip(-1)} aria-label="Back a sentence">
         <Icon name="back" size={13} />
       </button>
-      <span className="rr-player-what" title={p.error}>{p.error && !p.playing ? p.error : p.loading ? 'Making the voice…' : p.system ? 'Reading with the Mac’s voice' : 'Reading aloud from your place'}</span>
+      <span className="rr-player-what" title={p.error ?? p.note}>
+        {p.error && !p.playing ? p.error : p.loading ? (p.voice.engine === 'professor' ? 'Making the professor’s voice…' : 'Making the voice…') : p.system ? 'Reading with the Mac’s voice' : (p.note ?? (p.playing ? 'Reading aloud from your place' : 'Paused · your place is kept'))}
+      </span>
       <div className="rr-anchor">
         <button className="rr-voice" onClick={() => setOpen((v) => !v)} aria-expanded={open} disabled={p.system}>
           Voice: {p.system ? 'Mac' : voiceName}
@@ -43,15 +45,22 @@ export function PlayerBar({ path, onVoice }: { path: string; onVoice(v: BookVoic
         </button>
         {open && engine && (
           <div className="rr-voices" role="dialog" aria-label="Voice" onMouseLeave={() => setOpen(false)}>
-            <div className="rr-voices-head">{engine.label}</div>
-            <div className="rr-voices-list">
-              {engine.voices.map((v) => (
-                <button key={v.id} className={v.id === p.voice.narrator ? 'on' : ''} onClick={() => change({ ...p.voice, narrator: v.id })}>
-                  <b>{v.label}</b>
-                  <span>{v.detail}</span>
-                </button>
-              ))}
-            </div>
+            {engines.map((e) => (
+              <div key={e.id} className="rr-voices-engine">
+                <div className="rr-voices-head">
+                  {e.label}
+                  {!e.ready && <small>{e.detail}</small>}
+                </div>
+                <div className="rr-voices-list">
+                  {e.voices.map((v) => (
+                    <button key={v.id} className={e.id === p.voice.engine && v.id === p.voice.narrator ? 'on' : ''} disabled={!e.ready} onClick={() => change({ ...p.voice, engine: e.id, narrator: v.id, characters: e.multiVoice && !!p.voice.characters })}>
+                      <b>{v.label}</b>
+                      <span>{v.detail}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
             {engine.multiVoice && (
               <label className="rr-voices-check">
                 <input type="checkbox" checked={!!p.voice.characters} onChange={(e) => change({ ...p.voice, characters: e.target.checked })} />

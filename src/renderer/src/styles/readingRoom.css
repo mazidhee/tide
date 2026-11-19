@@ -782,6 +782,20 @@
   color: var(--rp-soft);
   margin: 0 4px 8px;
 }
+.rr-voices-head small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+}
+.rr-voices-engine + .rr-voices-engine {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rp-line);
+}
+.rr-voices-list button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
 .rr-voices-list {
   max-height: 240px;
   overflow-y: auto;

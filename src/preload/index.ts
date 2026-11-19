@@ -579,6 +579,7 @@ const api: TideApi = {
   },
   lecture: {
     prepare: invoke('lecture:prepare'),
+    narrate: invoke('lecture:narrate'),
     piece: invoke('lecture:piece'),
     status: invoke('lecture:status'),
     warm: invoke('lecture:warm'),

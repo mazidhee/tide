@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { existsSync, promises as fs } from 'fs'
 import { join } from 'path'
 import { chunkScript, engineFor, fallbackScript, lengthChoice, pieceTimeout, SCRIPT_SYSTEM, scriptPrompt, sourceOf, spokenWords, stripTags, tidyScript, toneOf, tooSlow, type LectureMode } from '@shared/lectureScript'
+import { narrationPieces } from '@shared/narration'
 import type { LectureState } from '@shared/types'
 import { lectureStatus, speak, speakFish, warmFish } from './voice'
 import { getSettings } from './settings'
@@ -93,6 +94,43 @@ export async function prepareLecture(req: { reply: string; mode?: LectureMode; k
   jobs.set(id, { state: st, kokoroVoice: req.kokoroVoice ?? 'bm_george', cancelled: false })
   bump(id)
   void run(id, req.reply, mode)
+  return st
+}
+
+/**
+ * A simulation's tour in the professor's voice: each step's words, already written by the tutor,
+ * cut into pieces that keep their step, so the window can say a step as the simulation does it.
+ * Made and kept like a reply's audio (the same words are made once).
+ */
+export async function prepareNarration(req: { says: string[]; kokoroVoice?: string }): Promise<LectureState> {
+  const id = createHash('sha1').update(`narrate\n${req.says.join('\n')}`).digest('hex').slice(0, 20)
+  const live = jobs.get(id)
+  if (live) {
+    bump(id)
+    return live.state
+  }
+  const saved = await loadState(id)
+  if (saved && saved.phase === 'done' && saved.pieces.every((p) => p.ready)) return saved
+  const lecture = (getSettings().voice?.lecture ?? 'fish') === 'fish'
+  const ready = lecture && (await lectureStatus()).ready
+  const pieces = narrationPieces(req.says)
+  const st: LectureState = saved ?? {
+    id,
+    phase: 'audio',
+    script: pieces.map((p) => p.text).join(' '),
+    scriptBy: 'rules',
+    scriptMs: 0,
+    // One voice for the whole tour: a short step isn't handed to Kokoro the way a reply's "Right." is
+    pieces: pieces.map((p) => ({ text: p.text, step: p.step, engine: ready ? 'fish' : 'kokoro', ready: false })),
+    startedAt: Date.now(),
+    ...(lecture && !ready ? { note: 'The lecture voice isn’t set up, so Kokoro is speaking.' } : {})
+  }
+  if (saved) Object.assign(st, { phase: 'audio', startedAt: Date.now(), firstAudioMs: undefined, totalMs: undefined })
+  jobs.set(id, { state: st, kokoroVoice: req.kokoroVoice ?? 'bm_george', cancelled: false })
+  bump(id)
+  publish(st)
+  await saveState(st)
+  void drain()
   return st
 }
 
@@ -206,6 +244,7 @@ export const lectureBusy = () => current
 
 export function registerLecture(handle: <A extends unknown[], R>(channel: string, fn: (...args: A) => R) => void) {
   handle('lecture:prepare', (req: { reply: string; mode?: LectureMode; kokoroVoice?: string }) => prepareLecture(req))
+  handle('lecture:narrate', (req: { says: string[]; kokoroVoice?: string }) => prepareNarration(req))
   handle('lecture:piece', (id: string, i: number) => lecturePiece(id, i))
   handle('lecture:status', () => lectureStatus())
   handle('lecture:warm', () => warmLecture())
